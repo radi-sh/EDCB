@@ -28,6 +28,11 @@
             <Canvas Name="canvas" HorizontalAlignment="Left" VerticalAlignment="Top">
 
                 <local:EpgViewPanel x:Name="epgViewPanel" Background="DarkGray" MouseMove="epgViewPanel_MouseMove" MouseLeftButtonDown="epgViewPanel_MouseLeftButtonDown" MouseLeftButtonUp="epgViewPanel_MouseLeftButtonUp" HorizontalAlignment="Left" VerticalAlignment="Top" MouseRightButtonDown="epgViewPanel_MouseRightButtonDown" />
+                <Line x:Name="nowLine" Canvas.ZIndex="30" StrokeThickness="3" Opacity="0.5" IsHitTestVisible="False" Visibility="Hidden" Stroke="Red">
+                    <Line.Effect>
+                        <DropShadowEffect BlurRadius="10"/>
+                    </Line.Effect>
+                </Line>
             </Canvas>
         </ScrollViewer>            
     </Grid>
