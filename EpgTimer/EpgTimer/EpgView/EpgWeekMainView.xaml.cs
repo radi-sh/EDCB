@@ -1350,7 +1350,7 @@ namespace EpgTimer
                         }
                     }
                     needUpdateVisual = true;
-                    updateVisual();
+                    UpdateVisual();
                 }
             }
             catch (Exception ex)
@@ -1876,7 +1876,7 @@ namespace EpgTimer
         private void UserControl_IsVisibleChanged_1(object sender, DependencyPropertyChangedEventArgs e)
         {
             if (this.IsVisible == false) { return; }
-            updateVisual();
+            UpdateVisual();
 
             // サービス選択
             UInt64 serviceKey_Target1 = 0;
@@ -1939,7 +1939,7 @@ namespace EpgTimer
             ViewSettingClick(this, setInfo);
         }
 
-        private void updateVisual()
+        private void UpdateVisual()
         {
             if (!IsVisible || !needUpdateVisual) return;
 
