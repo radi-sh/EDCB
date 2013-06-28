@@ -1233,6 +1233,7 @@ namespace EpgTimer
                 if (Instance.recInfoListColumn.Count == 0)
                 {
                     Instance.recInfoListColumn.Add(new ListColumnInfo("IsProtect", double.NaN));
+                    Instance.recInfoListColumn.Add(new ListColumnInfo("IsViewed", double.NaN));
                     Instance.recInfoListColumn.Add(new ListColumnInfo("StartTime", double.NaN));
                     Instance.recInfoListColumn.Add(new ListColumnInfo("NetworkName", double.NaN));
                     Instance.recInfoListColumn.Add(new ListColumnInfo("ServiceName", double.NaN));
@@ -1371,6 +1372,7 @@ namespace EpgTimer
                 if (Instance.recInfoListColumn.Count == 0)
                 {
                     Instance.recInfoListColumn.Add(new ListColumnInfo("IsProtect", double.NaN));
+                    Instance.recInfoListColumn.Add(new ListColumnInfo("IsViewed", double.NaN));
                     Instance.recInfoListColumn.Add(new ListColumnInfo("StartTime", double.NaN));
                     Instance.recInfoListColumn.Add(new ListColumnInfo("NetworkName", double.NaN));
                     Instance.recInfoListColumn.Add(new ListColumnInfo("ServiceName", double.NaN));
