@@ -32,7 +32,7 @@ namespace EpgTimer.EpgView
             stackPanel_day.Children.Clear();
         }
 
-        public void SetTime(System.Collections.SortedList timeList)
+        public void SetTime(SortedList<DateTime, TimePosInfo> timeList)
         {
             try
             {
@@ -43,9 +43,9 @@ namespace EpgTimer.EpgView
                     return;
                 }
 
-                TimePosInfo startPos = timeList.GetByIndex(0) as TimePosInfo;
+                TimePosInfo startPos = timeList.Values[0];
                 DateTime startTime = startPos.Time;
-                TimePosInfo endPos = timeList.GetByIndex(timeList.Count - 1) as TimePosInfo;
+                TimePosInfo endPos = timeList.Values[timeList.Count - 1];
                 DateTime endTime = endPos.Time;
                 DateTime itemTime = new DateTime(startTime.Year, startTime.Month, startTime.Day, 0, 0, 0);
                 while (itemTime < endTime)
