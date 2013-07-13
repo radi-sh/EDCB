@@ -235,6 +235,18 @@ DWORD CBonCtrl::OpenBonDriver(
 		wstring bonFile;
 		bonFile = this->bonUtil.GetOpenBonDriverFileName();
 		this->tsOut.SetBonDriver(bonFile);
+		wstring folderPath;
+		GetModuleFolderPath( folderPath );
+		wstring iniPath = folderPath;
+		iniPath += L"\\BonCtrl.ini";
+		this->twiceSetCh = GetPrivateProfileInt(bonFile.c_str(), L"TwiceSetCh", 0, iniPath.c_str());
+		if( this->twiceSetCh == 1){
+			this->twiceSetChWait = GetPrivateProfileInt(bonFile.c_str(), L"TwiceSetChWait", 500, iniPath.c_str());
+			if( this->twiceSetChWait > 1000 ){
+				this->twiceSetChWait = 1000;
+			}
+			_OutputDebugString(L"TwiceSetCh Wait = %dms\r\n", this->twiceSetChWait);
+		}
 	}
 	if( this->bonUtil.GetOpenBonDriverIndex() != -1 ){
 		this->chUtil.LoadChSet( this->bonUtil.GetChSet4Path(), this->bonUtil.GetChSet5Path() );
@@ -264,6 +276,18 @@ DWORD CBonCtrl::OpenBonDriver(
 		wstring bonFile;
 		bonFile = this->bonUtil.GetOpenBonDriverFileName();
 		this->tsOut.SetBonDriver(bonFile);
+		wstring folderPath;
+		GetModuleFolderPath( folderPath );
+		wstring iniPath = folderPath;
+		iniPath += L"\\BonCtrl.ini";
+		this->twiceSetCh = GetPrivateProfileInt(bonFile.c_str(), L"TwiceSetCh", 0, iniPath.c_str());
+		if( this->twiceSetCh == 1){
+			this->twiceSetChWait = GetPrivateProfileInt(bonFile.c_str(), L"TwiceSetChWait", 500, iniPath.c_str());
+			if( this->twiceSetChWait > 1000 ){
+				this->twiceSetChWait = 1000;
+			}
+			_OutputDebugString(L"TwiceSetCh Wait = %dms\r\n", this->twiceSetChWait);
+		}
 	}
 	if( this->bonUtil.GetOpenBonDriverIndex() != -1 ){
 		this->chUtil.LoadChSet( this->bonUtil.GetChSet4Path(), this->bonUtil.GetChSet5Path() );
@@ -432,38 +456,24 @@ DWORD CBonCtrl::_SetCh(
 
 	DWORD ret = ERR_FALSE;
 	if( this->bonUtil.GetNowCh(&spaceNow, &chNow) == TRUE ){
-		ret = NO_ERR;
-		if( space != spaceNow || ch != chNow ){
-			this->tsOut.SetChChangeEvent(chScan);
-			_OutputDebugString(L"SetCh space %d, ch %d", space, ch);
-			ret = this->bonUtil.SetCh(space, ch);
-
-			StartBackgroundEpgCap();
-		}else{
+		if( space == spaceNow && ch == chNow && chScan != TRUE ){
 			BOOL chChgErr = FALSE;
-			if( this->tsOut.IsChChanging(&chChgErr) == TRUE ){
-				if( chChgErr == TRUE ){
-					//エラーの時は再設定
-					this->tsOut.SetChChangeEvent();
-					_OutputDebugString(L"SetCh space %d, ch %d", space, ch);
-					ret = this->bonUtil.SetCh(space, ch);
-
-					StartBackgroundEpgCap();
-				}
-			}else{
-				if( chChgErr == TRUE ){
-					//エラーの時は再設定
-					this->tsOut.SetChChangeEvent();
-					_OutputDebugString(L"SetCh space %d, ch %d", space, ch);
-					ret = this->bonUtil.SetCh(space, ch);
-
-					StartBackgroundEpgCap();
-				}
+			BOOL chChanging = this->tsOut.IsChChanging(&chChgErr);
+			if( chChgErr != TRUE ){
+				return NO_ERR;
 			}
 		}
-	}else{
-		OutputDebugString(L"Err GetNowCh");
 	}
+	this->tsOut.SetChChangeEvent(chScan);
+	_OutputDebugString(L"SetCh space %d, ch %d", space, ch);
+	ret = this->bonUtil.SetCh(space, ch);
+	if( this->twiceSetCh == TRUE ){
+		Sleep(twiceSetChWait);
+		ret = this->bonUtil.SetCh(space, ch);
+	}
+
+	StartBackgroundEpgCap();
+
 	return ret;
 }
 

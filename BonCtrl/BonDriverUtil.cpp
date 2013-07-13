@@ -406,16 +406,6 @@ DWORD CBonDriverUtil::SetCh(
 	}
 	this->setSpace = space;
 	this->setCh = ch;
-	//初回は常にチャンネル設定行う
-	if( this->initChSetFlag == TRUE ){
-		//２回目以降は変更あった場合に行う
-		if( space == this->bon2IF->GetCurSpace() &&
-			ch == this->bon2IF->GetCurChannel() )
-		{
-			UnLock();
-			return NO_ERR;
-		}
-	}
 	if( this->bon2IF->SetChannel(space, ch) == FALSE ){
 		Sleep(500);
 		if( this->bon2IF->SetChannel(space, ch) == FALSE ){

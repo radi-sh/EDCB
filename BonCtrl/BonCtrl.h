@@ -538,6 +538,10 @@ protected:
 	DWORD epgCapBackStartWaitSec;
 	DWORD tsBuffMaxCount;
 	int writeBuffMaxCount;
+
+	BOOL twiceSetCh;
+	int twiceSetChWait;
+
 protected:
 	//PublicAPIîrëºêßå‰óp
 	BOOL Lock(LPCWSTR log = NULL, DWORD timeOut = 15*1000);
