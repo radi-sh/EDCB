@@ -46,7 +46,30 @@ namespace EpgTimer.EpgView
                 }
                 else
                 {
-                    item.Text += "\r\n" + info.network_name + " " + info.SID.ToString();
+                    if (0x7880 <= info.ONID && info.ONID <= 0x7FE8)
+                    {
+                        item.Text += "\r\n" + "地デジ " + info.SID.ToString("000");
+                    }
+                    else if (info.ONID == 0x0004)
+                    {
+                        item.Text += "\r\n" + "BS " + info.SID.ToString("000");
+                    }
+                    else if (info.ONID == 0x0006 || info.ONID == 0x0007)
+                    {
+                        item.Text += "\r\n" + "CS " + (info.SID & 0x3FF).ToString("000");
+                    }
+                    else if (info.ONID == 0x000A)
+                    {
+                        item.Text += "\r\n" + "スカパー! " + (info.SID & 0x3FF).ToString("000");
+                    }
+                    else if (info.ONID == 0x0001 || info.ONID == 0x0003)
+                    {
+                        item.Text += "\r\n" + "スカパー!SD " + (info.SID & 0x3FF).ToString("000");
+                    }
+                    else
+                    {
+                        item.Text += "\r\n" + info.network_name + " " + (info.SID & 0x3FF).ToString("000");
+                    }
                 }
                 item.Width = Settings.Instance.ServiceWidth - 4;
                 item.Margin = new Thickness(2, 2, 2, 2);
