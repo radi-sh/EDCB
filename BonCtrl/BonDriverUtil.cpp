@@ -407,12 +407,14 @@ DWORD CBonDriverUtil::SetCh(
 	this->setSpace = space;
 	this->setCh = ch;
 	if( this->bon2IF->SetChannel(space, ch) == FALSE ){
-		Sleep(500);
+		Sleep(100);
 		if( this->bon2IF->SetChannel(space, ch) == FALSE ){
 			UnLock();
 			return ERR_FALSE;
 		}
 	}
+	this->bon2IF->PurgeTsStream();
+	Sleep(100);
 	this->initChSetFlag = TRUE;
 	UnLock();
 	return NO_ERR;

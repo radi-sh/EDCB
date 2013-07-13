@@ -64,7 +64,7 @@ void CSetDlgService::OnBnClickedButtonChkVideo()
 	// TODO: ここにコントロール通知ハンドラー コードを追加します。
 	for( int i=0; i<this->listService.GetCount(); i++ ){
 		CH_DATA4* chSet = (CH_DATA4*)listService.GetItemDataPtr(i);
-		if( chSet->serviceType == 0x01 || chSet->serviceType == 0xA5 ){
+		if( chSet->serviceType == 0x01 || chSet->serviceType == 0xA5 || chSet->serviceType == 0x81 ){
 			chSet->useViewFlag = TRUE;
 			this->listService.SetCheck(i, TRUE);
 		}else{

@@ -67,6 +67,14 @@ DWORD WINAPI GetServiceListActualEP(
 	SERVICE_INFO** serviceList
 	);
 
+//ストリームの変更を通知する
+//引数：
+// id						[IN]識別ID
+__declspec(dllexport)
+void WINAPI SetStreamChangeEventEP(
+	DWORD id
+	);
+
 //蓄積されたEPG情報のあるサービス一覧を取得する
 //SERVICE_EXT_INFOの情報はない場合がある
 //戻り値：

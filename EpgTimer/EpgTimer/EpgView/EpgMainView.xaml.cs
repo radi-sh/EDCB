@@ -1850,6 +1850,12 @@ namespace EpgTimer
                         serviceInfo = new EpgServiceEventInfo();
                         serviceInfo.serviceInfo = CommonManager.ConvertChSet5To(ChSet5.Instance.ChList[id]);
 
+                        // ChSet5にはリモコンキーが含まれていないので取得
+                        if (CommonManager.Instance.DB.ServiceEventList.ContainsKey(id) == true)
+                        {
+                            serviceInfo.serviceInfo.remote_control_key_id = CommonManager.Instance.DB.ServiceEventList[id].serviceInfo.remote_control_key_id;
+                        }
+                        
                         serviceEventList.Add(id, serviceInfo);
                     }
                     else

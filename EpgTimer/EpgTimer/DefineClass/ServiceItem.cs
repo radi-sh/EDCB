@@ -64,6 +64,14 @@ namespace EpgTimer
                 {
                     name = "地デジ";
                 }
+                else if (ServiceInfo.ONID == 0x000A)
+                {
+                    name = "スカパー!";
+                }
+                else if (ServiceInfo.ONID == 0x0001 || ServiceInfo.ONID == 0x0003)
+                {
+                    name = "スカパー!SD";
+                }
                 return name;
             }
         }

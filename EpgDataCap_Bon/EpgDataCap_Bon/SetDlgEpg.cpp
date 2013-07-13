@@ -120,7 +120,7 @@ void CSetDlgEpg::OnBnClickedButtonVideoChk()
 		map<LONGLONG, CH_DATA5>::iterator itr;
 		itr = this->chSet.chList.begin();
 		advance(itr, i);
-		if( itr->second.serviceType == 0x01 || itr->second.serviceType == 0xA5 ){
+		if( itr->second.serviceType == 0x01 || itr->second.serviceType == 0xA5 || itr->second.serviceType == 0x81 ){
 			this->serviceList.SetCheck(i, TRUE);
 		}else{
 			this->serviceList.SetCheck(i, FALSE);

@@ -139,19 +139,13 @@ BOOL CParseChText4::Parse1Line(string parseLine, CH_DATA4* chInfo )
 
 BOOL CParseChText4::AddCh(CH_DATA4 chInfo )
 {
-	LONGLONG iKey = _Create64Key(chInfo.originalNetworkID, chInfo.transportStreamID, chInfo.serviceID );
-	multimap<LONGLONG, CH_DATA4>::iterator itrF;
-	itrF = this->chList.find(iKey);
-	if( itrF == this->chList.end() ){
-		this->chList.insert( pair<LONGLONG, CH_DATA4>(iKey,chInfo) );
-	}else{
-		if( itrF->second.ch == chInfo.ch && itrF->second.space == chInfo.space ){
-			return FALSE;
-		}else{
-			this->chList.insert( pair<LONGLONG, CH_DATA4>(iKey,chInfo) );
-		}
+	CH_DATA4* foundP;
+	if( _FindChService(chInfo, &foundP) == FALSE ){
+		LONGLONG iKey = _Create64Key(chInfo.originalNetworkID, chInfo.transportStreamID, chInfo.serviceID );
+		this->chList.insert( pair<LONGLONG, CH_DATA4>(iKey, chInfo) );
+		return TRUE;
 	}
-	return TRUE;
+	return FALSE;
 }
 
 BOOL CParseChText4::DelCh(WORD originalNetworkID, WORD transportStreamID, WORD serviceID)
@@ -248,5 +242,47 @@ BOOL CParseChText4::SaveChText(LPCWSTR filePath)
 
 	CloseHandle(hFile);
 	return TRUE;
+}
+
+BOOL CParseChText4::_FindChService(CH_DATA4 searchInfo, CH_DATA4** foundP )
+{
+	multimap<LONGLONG, CH_DATA4>::iterator itrF;
+	for( itrF = this->chList.begin(); itrF != this->chList.end(); itrF++ ){
+		if( itrF->second.originalNetworkID != searchInfo.originalNetworkID
+				|| itrF->second.transportStreamID != searchInfo.transportStreamID
+				|| itrF->second.serviceID != searchInfo.serviceID
+				|| itrF->second.space != searchInfo.space
+				|| itrF->second.ch != searchInfo.ch ){
+			continue;
+		}else{
+			if( foundP != NULL ){
+				*foundP = &itrF->second;
+			}
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+BOOL CParseChText4::FindChService(CH_DATA4 searchInfo, CH_DATA4* chInfo )
+{
+	CH_DATA4* foundP;
+	if( _FindChService(searchInfo, &foundP) == TRUE ){
+		if( chInfo != NULL ){
+			*chInfo = *foundP;
+		}
+		return TRUE;
+	}
+	return FALSE;
+}
+
+BOOL CParseChText4::ChangeCh(CH_DATA4 chInfo )
+{
+	CH_DATA4* foundP;
+	if( _FindChService(chInfo, &foundP) == TRUE ){
+		*foundP = chInfo;
+		return TRUE;
+	}
+	return FALSE;
 }
 

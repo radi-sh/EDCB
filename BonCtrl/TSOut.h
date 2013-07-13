@@ -24,7 +24,9 @@ public:
 	~CTSOut(void);
 
 	DWORD SetChChangeEvent(BOOL resetEpgUtil = FALSE);
+	DWORD SetAfterChChangeEvent(BOOL resetEpgUtil = FALSE);
 	BOOL IsChChanging(BOOL* chChgErr);
+	BOOL NeedPurge(void);
 	void ResetChChange();
 
 	//Œ»İ‚ÌƒXƒgƒŠ[ƒ€‚ÌID‚ğæ“¾‚·‚é
@@ -325,6 +327,7 @@ protected:
 	CCreatePATPacket patUtil;
 
 	BOOL chChangeFlag;
+	BOOL afterChChangeFlag;
 	BOOL chChangeErr;
 	LONGLONG chChangeTime;
 	WORD lastONID;

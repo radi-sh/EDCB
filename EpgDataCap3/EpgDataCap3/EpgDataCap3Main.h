@@ -58,6 +58,9 @@ public:
 		SERVICE_INFO** serviceList
 		);
 
+	//ストリームの変更を通知する
+	void SetStreamChangeEvent();
+
 	//蓄積されたEPG情報のあるサービス一覧を取得する
 	//SERVICE_EXT_INFOの情報はない場合がある
 	//戻り値：

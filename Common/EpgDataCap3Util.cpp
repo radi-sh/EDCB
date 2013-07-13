@@ -24,6 +24,7 @@ BOOL CEpgDataCap3Util::LoadDll(void)
 	pfnUnInitializeEP3 = NULL;
 	pfnAddTSPacketEP3 = NULL;
 	pfnGetTSIDEP3 = NULL;
+	pfnSetStreamChangeEventEP3 = NULL;
 	pfnGetEpgInfoListEP3 = NULL;
 	pfnClearSectionStatusEP3 = NULL;
 	pfnGetSectionStatusEP3 = NULL;
@@ -64,6 +65,12 @@ BOOL CEpgDataCap3Util::LoadDll(void)
 	pfnGetTSIDEP3 = ( GetTSIDEP3 ) ::GetProcAddress( module , "GetTSIDEP");
 	if( !pfnGetTSIDEP3 ){
 		OutputDebugString(L"GetTSIDEPの GetProcAddress に失敗\r\n");
+		ret = FALSE;
+		goto ERR_END;
+	}
+	pfnSetStreamChangeEventEP3 = ( SetStreamChangeEventEP3 ) ::GetProcAddress( module , "SetStreamChangeEventEP");
+	if( !pfnSetStreamChangeEventEP3 ){
+		OutputDebugString(L"SetStreamChangeEventEPの GetProcAddress に失敗\r\n");
 		ret = FALSE;
 		goto ERR_END;
 	}
@@ -234,6 +241,15 @@ DWORD CEpgDataCap3Util::GetServiceListActual(
 		return ERR_NOT_INIT;
 	}
 	return pfnGetServiceListActualEP3(id, serviceListSize, serviceList);
+}
+
+//ストリームの変更を通知する
+void CEpgDataCap3Util::SetStreamChangeEvent()
+{
+	if( module == NULL || id == 0 ){
+		return ;
+	}
+	pfnSetStreamChangeEventEP3(id);
 }
 
 //蓄積されたEPG情報のあるサービス一覧を取得する

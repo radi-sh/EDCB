@@ -63,6 +63,13 @@ typedef DWORD (WINAPI *GetServiceListActualEP3)(
 	SERVICE_INFO** serviceList
 	);
 
+//ストリームの変更を通知する
+//引数：
+// id						[IN]識別ID
+typedef void (WINAPI *SetStreamChangeEventEP3)(
+	DWORD id
+	);
+
 //蓄積されたEPG情報のあるサービス一覧を取得する
 //SERVICE_EXT_INFOの情報はなし
 //戻り値：
@@ -215,6 +222,10 @@ public:
 		SERVICE_INFO** serviceList
 		);
 
+	//ストリームの変更を通知する
+	void SetStreamChangeEvent(
+		);
+
 	//蓄積されたEPG情報のあるサービス一覧を取得する
 	//SERVICE_EXT_INFOの情報はない
 	//戻り値：
@@ -305,6 +316,7 @@ protected:
 	UnInitializeEP3			pfnUnInitializeEP3;
 	AddTSPacketEP3			pfnAddTSPacketEP3;
 	GetTSIDEP3				pfnGetTSIDEP3;
+	SetStreamChangeEventEP3	pfnSetStreamChangeEventEP3;
 	GetEpgInfoListEP3		pfnGetEpgInfoListEP3;
 	ClearSectionStatusEP3	pfnClearSectionStatusEP3;
 	GetSectionStatusEP3		pfnGetSectionStatusEP3;

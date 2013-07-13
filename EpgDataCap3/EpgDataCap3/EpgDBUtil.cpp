@@ -11,8 +11,6 @@ CEpgDBUtil::CEpgDBUtil(void)
 {
 	this->lockEvent = _CreateEvent(FALSE, TRUE, NULL);
 
-	this->sectionNowFlag = 0;
-
 	this->epgInfoList = NULL;
 	this->epgInfoListSize = 0;
 
@@ -24,12 +22,18 @@ CEpgDBUtil::CEpgDBUtil(void)
 
 	this->serviceDBList = NULL;
 	this->serviceDBListSize = 0;
+
+	this->ONID = 0;
+	this->TSID = 0;
+	SYSTEMTIME tmp = {0,};
+	memcpy(&this->tdtTime, &tmp, sizeof(SYSTEMTIME));
 }
 
 CEpgDBUtil::~CEpgDBUtil(void)
 {
 	Clear();
 	ClearSectionStatus();
+	ClearSectionStatusSD();
 
 	map<DWORD, DB_TS_INFO*>::iterator itrInfo;
 	for( itrInfo = this->serviceInfoList.begin(); itrInfo != this->serviceInfoList.end(); itrInfo++ ){
@@ -115,6 +119,82 @@ BOOL CEpgDBUtil::AddEIT(WORD PID, CEITTable* eit)
 	}
 	if( Lock() == FALSE ) return FALSE;
 
+	BOOL alreadyGot = FALSE;
+
+	//セクションステータス
+	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itrSec;
+	SECTION_STATUS_INFO* sectionInfo = NULL;
+	ULONGLONG key2;
+	//SKYサービスはTSID無しのkey
+	if( eit->original_network_id == 3 ){
+		key2 = _Create64Key(eit->original_network_id, 0, eit->service_id);
+	}else{
+		key2 = _Create64Key(eit->original_network_id, eit->transport_stream_id, eit->service_id);
+	}
+	itrSec = this->sectionMap.find(key2);
+	if( itrSec == this->sectionMap.end() ){
+		sectionInfo = new SECTION_STATUS_INFO;
+		this->sectionMap.insert(pair<ULONGLONG, SECTION_STATUS_INFO*>(key2, sectionInfo));
+	}else{
+		sectionInfo = itrSec->second;
+	}
+
+	SECTION_FLAG_INFO* sectionFlag = NULL;
+	BYTE tableIndex = 0;	//サブテーブルの先頭からのインデックス
+	BYTE lastTableIndex = 0; //last_table_idの替わり(BS103のp/fがtable_id=4f,last_table_id=4eで送出される対策)
+	BYTE sectionIndex = eit->section_number;  //そのサブテーブルのセクション番号
+	BYTE segmentLen = 1; //セグメントのセクション数
+
+	if( eit->table_id == 0x4E || eit->table_id == 0x4F ){
+		sectionFlag = &sectionInfo->sectionPF;
+	}else if( 0x50 <= eit->table_id && eit->table_id <= 0x57 ||	0x60 <= eit->table_id && eit->table_id <= 0x67){
+		sectionFlag = &sectionInfo->sectionBasic;
+		tableIndex = eit->table_id & 0x07;
+		lastTableIndex = eit->last_table_id & 0x07;
+		segmentLen = 8;
+	}else if( 0x58 <= eit->table_id && eit->table_id <= 0x5F ||	0x68 <= eit->table_id && eit->table_id <= 0x6F){
+		sectionFlag = &sectionInfo->sectionExt;
+		tableIndex = eit->table_id & 0x07;
+		lastTableIndex = eit->last_table_id & 0x07;
+		segmentLen = 8;
+	}
+
+	if( sectionFlag != NULL ){
+		//バージョン番号が替わっていたらClear
+		if( eit->version_number != sectionFlag->version[tableIndex] ){
+			if( (BYTE)~0 != sectionFlag->version[tableIndex] ){
+				sectionFlag->Clear();
+			}
+			sectionFlag->version[tableIndex] = eit->version_number;
+		}
+		//現在のテーブル番号がサブテーブルの最終ならば最終通しセクション番号を記録
+		if( sectionFlag->last_section_number == (WORD)~0 && tableIndex == lastTableIndex ){
+			sectionFlag->last_section_number = eit->last_section_number + (tableIndex * 256);
+		}
+		//現在のセクション通し番号 (サブテーブル番号*256)+セクション番号
+		WORD sectionNo = sectionIndex + (tableIndex * 256);
+
+		//未取得のセクション？
+		if( (sectionFlag->sectionFlag[sectionNo/64] & (1ULL<<(sectionNo%64))) == 0 ){
+			//セグメントの最終セクションであれば現在のセクション番号以降を埋める
+			if( eit->section_number == eit->segment_last_section_number ){
+				for( WORD i=sectionNo%64; i<=((sectionNo%64) | (segmentLen - 1)); i++ ){
+					sectionFlag->sectionFlag[sectionNo/64] |= 1ULL<<i;
+				}
+			//現在のセクション番号に該当するbitのみを立てる
+			}else{
+				sectionFlag->sectionFlag[sectionNo/64] |= 1ULL<<sectionNo%64;
+			}
+		}else{
+			alreadyGot = TRUE;
+		}
+	}
+
+	if( alreadyGot || eit->failure ){
+		UnLock();
+		return TRUE;
+	}
+
 	ULONGLONG key = _Create64Key(eit->original_network_id, eit->transport_stream_id, eit->service_id);
 
 	//サービスのmapを取得
@@ -129,7 +209,6 @@ BOOL CEpgDBUtil::AddEIT(WORD PID, CEITTable* eit)
 		serviceInfo = itr->second;
 	}
 
-	if( !eit->failure ){
 	//イベントごとに更新必要が判定
 	for( size_t i=0; i<eit->eventInfoList.size(); i++ ){
 		CEITTable::EVENT_INFO_DATA* eitEventInfo = eit->eventInfoList[i];
@@ -221,130 +300,7 @@ BOOL CEpgDBUtil::AddEIT(WORD PID, CEITTable* eit)
 			}
 		}
 	}
-	}
 
-	if( eit->original_network_id == 0x0003 ){
-		UnLock();
-
-		return !eit->failure;
-	}
-	
-	//セクションステータス
-	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itrSec;
-	SECTION_STATUS_INFO* sectionInfo = NULL;
-	itrSec = this->sectionMap.find(key);
-	if( itrSec == this->sectionMap.end() ){
-		sectionInfo = new SECTION_STATUS_INFO;
-		this->sectionMap.insert(pair<ULONGLONG, SECTION_STATUS_INFO*>(key, sectionInfo));
-	}else{
-		sectionInfo = itrSec->second;
-	}
-
-	if( PID == 0x0027 ){
-		//L-EIT
-		sectionInfo->HEITFlag = FALSE;
-		sectionInfo->last_table_idBasic = eit->last_table_id;
-		sectionInfo->last_section_numberBasic = eit->last_section_number;
-
-		DWORD sectionNo = eit->section_number;
-		map<WORD, SECTION_FLAG_INFO>::iterator itrFlag;
-		itrFlag = sectionInfo->sectionBasicMap.find(eit->table_id);
-		if( itrFlag == sectionInfo->sectionBasicMap.end() ){
-			DWORD maxFlag = 0;
-			for( DWORD i=0; i<=eit->last_section_number; i++ ){
-				maxFlag |= 1<<i;
-			}
-			SECTION_FLAG_INFO item;
-			item.maxFlag = maxFlag;
-			item.sectionFlag = 1<<sectionNo;
-			sectionInfo->sectionBasicMap.insert(pair<WORD, SECTION_FLAG_INFO>(eit->table_id, item));
-		}else{
-			itrFlag->second.sectionFlag |= 1<<sectionNo;
-		}
-		if (eit->failure){
-			UnLock();
-			return FALSE;
-		}
-	}else{
-		//H-EIT
-		sectionInfo->HEITFlag = TRUE;
-		if( eit->section_number == eit->segment_last_section_number ){
-			if( 0x50 <= eit->table_id && eit->table_id <= 0x57 ||
-				0x60 <= eit->table_id && eit->table_id <= 0x67){
-				sectionInfo->last_table_idBasic = eit->last_table_id;
-				sectionInfo->last_section_numberBasic = eit->last_section_number;
-
-				DWORD sectionNo = eit->section_number >> 3;
-				map<WORD, SECTION_FLAG_INFO>::iterator itrFlag;
-				itrFlag = sectionInfo->sectionBasicMap.find(eit->table_id);
-				if( itrFlag == sectionInfo->sectionBasicMap.end() ){
-					DWORD maxFlag = 0;
-					for( DWORD i=0; i<=((DWORD)eit->last_section_number)>>3; i++ ){
-						maxFlag |= 1<<i;
-					}
-					SECTION_FLAG_INFO item;
-					item.maxFlag = maxFlag;
-					item.sectionFlag = 1<<sectionNo;
-					sectionInfo->sectionBasicMap.insert(pair<WORD, SECTION_FLAG_INFO>(eit->table_id, item));
-				}else{
-					itrFlag->second.sectionFlag |= (DWORD)1<<sectionNo;
-				}
-			}
-			if( 0x58 <= eit->table_id && eit->table_id <= 0x5F ||
-				0x68 <= eit->table_id && eit->table_id <= 0x6F){
-				sectionInfo->last_table_idExt = eit->last_table_id;
-				sectionInfo->last_section_numberExt = eit->last_section_number;
-
-				DWORD sectionNo = eit->section_number >> 3;
-				map<WORD, SECTION_FLAG_INFO>::iterator itrFlag;
-				itrFlag = sectionInfo->sectionExtMap.find(eit->table_id);
-				if( itrFlag == sectionInfo->sectionExtMap.end() ){
-					DWORD maxFlag = 0;
-					for( DWORD i=0; i<=((DWORD)eit->last_section_number)>>3; i++ ){
-						maxFlag |= 1<<i;
-					}
-					SECTION_FLAG_INFO item;
-					item.maxFlag = maxFlag;
-					item.sectionFlag = 1<<sectionNo;
-					sectionInfo->sectionExtMap.insert(pair<WORD, SECTION_FLAG_INFO>(eit->table_id, item));
-				}else{
-					itrFlag->second.sectionFlag |= (DWORD)1<<sectionNo;
-				}
-			}
-		}
-		if (eit->failure){
-			UnLock();
-			return FALSE;
-		}
-		if( eit->table_id == 0x4E && eit->section_number == 0){
-			//現在の番組のはずなので、そこまでのセクションはすでに放送済み
-			if(eit->eventInfoList.size() > 0){
-				if( eit->eventInfoList[0]->StartTimeFlag == TRUE ){
-					WORD sectionNo = 0;
-					if( eit->eventInfoList[0]->DurationFlag == FALSE ){
-						sectionNo = eit->eventInfoList[0]->start_time.wHour / 3;
-					}else{
-						SYSTEMTIME endTime;
-						int DureSec = eit->eventInfoList[0]->durationHH*60*60 + eit->eventInfoList[0]->durationMM*60 + eit->eventInfoList[0]->durationSS;
-						GetSumTime(eit->eventInfoList[0]->start_time, DureSec, &endTime);
-						if( eit->eventInfoList[0]->start_time.wDay != endTime.wDay ){
-							//日付変わってるので今日の分は全部終わってるはず
-							sectionNo = 7;
-						}else{
-							sectionNo = endTime.wHour / 3;
-						}
-					}
-					DWORD flag = 0;
-					for( WORD i=0; i<=sectionNo; i++ ){
-						flag |= 1<<i;
-					}
-					if(	this->sectionNowFlag != flag ){
-						this->sectionNowFlag = flag;
-					}
-				}
-			}
-		}
-	}
 	UnLock();
 
 	return TRUE;
@@ -357,7 +313,7 @@ BOOL CEpgDBUtil::AddEIT_SD(WORD PID, CEITTable_SD* eit)
 	}
 	if( Lock() == FALSE ) return FALSE;
 
-	if( eit->original_network_id == 0x0003 && eit->table_id != 0x4E && eit->table_id != 0x4F){
+	if( eit->original_network_id == 0x0003 ){
 		BOOL ret = AddSDEventMap(eit);
 		UnLock();
 		return ret;
@@ -1217,38 +1173,44 @@ void CEpgDBUtil::ClearSectionStatus()
 		SAFE_DELETE(itr->second);
 	}
 	this->sectionMap.clear();
-	this->sectionNowFlag = 0;
 
 	UnLock();
 }
 
-BOOL CEpgDBUtil::CheckSectionAll(map<WORD, SECTION_FLAG_INFO>* sectionMap, BOOL leitFlag)
+BOOL CheckSectionDay(const SECTION_FLAG_INFO * section, SYSTEMTIME time, WORD count, WORD * errPos, ULONGLONG * errData)
 {
-	if( sectionMap == NULL ){
-		return FALSE;
-	}
-	if( sectionMap->size() == 0 ){
-		return FALSE;
-	}
-
-	BOOL allChk = TRUE;
-	map<WORD, SECTION_FLAG_INFO>::iterator itr;
-	for( itr = sectionMap->begin(); itr != sectionMap->end(); itr++ ){
-//		_OutputDebugString(L"0x%016X, 0x%016X\r\n",itr->second.maxFlag, (itr->second.sectionFlag | this->sectionNowFlag));
-		if( leitFlag == FALSE ){
-			if( itr->second.maxFlag != (itr->second.sectionFlag | this->sectionNowFlag) ){
-				allChk = FALSE;
-				break;
-			}
-		}else{
-			if( itr->second.maxFlag != itr->second.sectionFlag ){
-				allChk = FALSE;
-				break;
+	for( int i=0; i<count/8; i++ ){
+		WORD pos = (time.wHour / 3) * 8;
+		for( int j=pos; j<pos+8; j++ ){
+			if( (section->sectionFlag[time.wDay-1] & (1ULL<<j)) == 0 ){
+				if( errPos != NULL ){
+					*errPos = ((time.wDay - 1) * 64) + j;
+				}
+				if( errData != NULL ){
+					*errData = section->sectionFlag[time.wDay-1];
+				}
+				return FALSE;
 			}
 		}
+		GetSumTime(time, 3*60*60, &time);
 	}
+	return TRUE;
+}
 
-	return allChk;
+BOOL CheckSectionAll(const SECTION_FLAG_INFO * section, WORD now, WORD * errPos, ULONGLONG * errData)
+{
+	for( WORD i=now; i<=section->last_section_number; i++ ){
+		if( (section->sectionFlag[i/64] & (1ULL<<(i%64))) == 0 ){
+			if( errPos != NULL ){
+				*errPos = i;
+			}
+			if( errData != NULL ){
+				*errData = section->sectionFlag[i/64];
+			}
+			return FALSE;
+		}
+	}
+	return TRUE;
 }
 
 EPG_SECTION_STATUS CEpgDBUtil::GetSectionStatus(BOOL l_eitFlag)
@@ -1263,53 +1225,157 @@ EPG_SECTION_STATUS CEpgDBUtil::GetSectionStatus(BOOL l_eitFlag)
 
 	BOOL basicFlag = TRUE;
 	BOOL extFlag = TRUE;
-	BOOL leitFlag = TRUE;
+	BOOL pfFlag = TRUE;
+	BOOL otherBasicFlag = TRUE;
+	BOOL otherExtFlag = TRUE;
+	BOOL otherPfFlag = TRUE;
+
+	WORD now = (tdtTime.wHour / 3) * 8;
+	WORD errPos;
+	ULONGLONG errData;
 
 	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itr;
 	for( itr = this->sectionMap.begin(); itr != this->sectionMap.end(); itr++ ){
-		if( l_eitFlag == TRUE ){
-			//L-EITの状況
-			if( itr->second->HEITFlag == FALSE ){
-				if( itr->second->last_section_numberBasic > 0 ){
-					if( CheckSectionAll( &itr->second->sectionBasicMap, TRUE ) == FALSE ){
-						leitFlag = FALSE;
-						break;
+
+		//サービスリストあるなら映像・音声サービスのみ対象
+		map<ULONGLONG, BYTE>::iterator itrType;
+		itrType = this->serviceList.find(itr->first);
+		if( itrType != this->serviceList.end() ){
+			if( itrType->second != 0x01			//映像
+					&& itrType->second != 0x02	//音声
+				//	&& itrType->second != 0x80	//
+					&& itrType->second != 0x81	//
+					&& itrType->second != 0xA1	//臨時映像
+					&& itrType->second != 0xA2	//臨時音声
+					&& itrType->second != 0xA3	//臨時データ
+				//	&& itrType->second != 0xA4	//ES
+					&& itrType->second != 0xA5	//プロモ映像
+					&& itrType->second != 0xA6	//プロモ音声
+					&& itrType->second != 0xA7	//プロモデータ
+					&& itrType->second != 0xC0	//データ
+					){
+				continue;
+			}
+		}
+//		_OutputDebugString(L"0x%I64X, %x,%x, %x,%x, \r\n",itr->first, itr->second->last_section_numberBasic, itr->second->last_table_idBasic, itr->second->last_section_numberExt, itr->second->last_table_idExt);
+
+		//自ストリーム
+		if( itr->second->otherStreamFlag == 0 ){
+			// EIT(p/f) EIT_present_following_flagに従う
+			if( pfFlag == TRUE && itr->second->EIT_present_following_flag == 1 ){
+				if( CheckSectionAll(&itr->second->sectionPF, 0, &errPos, &errData) == FALSE ){
+					pfFlag = FALSE;
+//					_OutputDebugString(L"unacquired p/f section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
+				}
+			}
+
+			//EIT(スケジュール)
+			if( itr->second->EIT_schedule_flag == 1 && this->ONID != 1 && this->ONID != 3 ){
+				//BasicはEIT_schedule_flagフラグが1のもの全て対象
+				if( basicFlag == TRUE ){
+					if( CheckSectionAll(&itr->second->sectionBasic, now, &errPos, &errData) == FALSE ){
+						basicFlag = FALSE;
+//						_OutputDebugString(L"unacquired basic section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
+					}
+				}
+
+				//Extは取得状態が不完全なものだけNG
+				if( extFlag == TRUE && itr->second->sectionExt.last_section_number != (WORD)~0 ){
+					if( CheckSectionAll(&itr->second->sectionExt, now, &errPos, &errData) == FALSE ){
+						extFlag = FALSE;
+//						_OutputDebugString(L"unacquired ext section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
 					}
 				}
 			}
+		//他ストリーム
 		}else{
-			//H-EITの状況
-			if( itr->second->HEITFlag == TRUE ){
-				//サービスリストあるなら映像サービスのみ対象
-				map<ULONGLONG, BYTE>::iterator itrType;
-				itrType = this->serviceList.find(itr->first);
-				if( itrType != this->serviceList.end() ){
-					if( itrType->second != 0x01 && itrType->second != 0xA5 ){
-						continue;
+			//EIT(p/f) EIT_present_following_flagに従う
+			if( otherPfFlag == TRUE && itr->second->EIT_present_following_flag == 1 ){
+				if( CheckSectionAll(&itr->second->sectionPF, 0, &errPos, &errData) == FALSE ){
+					otherPfFlag = FALSE;
+//					_OutputDebugString(L"unacquired p/f(o) section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
+				}
+			}
+
+			//EIT(スケジュール)
+			if( itr->second->EIT_schedule_flag == 1 && this->ONID != 1 && this->ONID != 3 ){
+				//BasicはEIT_schedule_flagフラグが1のもの全て対象
+				if( otherBasicFlag == TRUE ){
+					if( CheckSectionAll(&itr->second->sectionBasic, now, &errPos, &errData) == FALSE ){
+						otherBasicFlag = FALSE;
+//						_OutputDebugString(L"unacquired basic(o) section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
 					}
 				}
-//				_OutputDebugString(L"0x%I64X, %x,%x, %x,%x, \r\n",itr->first, itr->second->last_section_numberBasic, itr->second->last_table_idBasic, itr->second->last_section_numberExt, itr->second->last_table_idExt);
+
+				//Extは取得状態が不完全なものだけNG
+				if( otherExtFlag == TRUE && itr->second->sectionExt.last_section_number != (WORD)~0 ){
+					if( CheckSectionAll(&itr->second->sectionExt, now, &errPos, &errData) == FALSE ){
+						otherExtFlag = FALSE;
+//						_OutputDebugString(L"unacquired ext(o) section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
+					}
+				}
+			}
+		}
+
+		//PerfecTVサービスのEIT(スケジュール)
+		//テーブル番号下3bitが固定で日付に対応する
+		//    0: 1日～4日
+		//    1: 5日～8日
+		//    2: 9日～12日
+		//    3: 13日～16日
+		//    4: 17日～20日
+		//    5: 21日～24日
+		//    6: 25日～28日
+		//    7: 26日～31日
+		if( itr->second->EIT_schedule_flag == 1 && this->ONID == 1 ){
+			if( this->TSID == 0x0017 ){
+				//基本情報は7日分、拡張情報は3日分提供され、情報の追加は3時間単位で行われる…ような気がする
 				//Basic
-				if( itr->second->last_section_numberBasic > 0 ){
-					if( CheckSectionAll( &itr->second->sectionBasicMap ) == FALSE ){
-						basicFlag = FALSE;
+				if( basicFlag == TRUE ){
+					if( CheckSectionDay(&itr->second->sectionBasic, tdtTime, (7*64)+8, &errPos, &errData) == FALSE ){
+						basicFlag = otherBasicFlag = FALSE;
+//						_OutputDebugString(L"unacquired basic(nid=1) section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
 					}
 				}
+
 				//Ext
-				if( itr->second->last_section_numberExt > 0 ){
-					if( CheckSectionAll( &itr->second->sectionExtMap ) == FALSE ){
-						extFlag = FALSE;
+				if( extFlag == TRUE ){
+					if( CheckSectionDay(&itr->second->sectionExt, tdtTime, (3*64)+8, &errPos, &errData) == FALSE ){
+						extFlag = otherExtFlag = FALSE;
+//						_OutputDebugString(L"unacquired ext(nid=1) section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
 					}
 				}
-				if( basicFlag == FALSE && extFlag == FALSE ){
+			}else{
+				//プロモCH以外のストリームでは基本情報6H分のみ
+				//Basic
+				if( basicFlag == TRUE ){
+					if( CheckSectionDay(&itr->second->sectionBasic, tdtTime, 16+8, &errPos, &errData) == FALSE ){
+						basicFlag = otherBasicFlag = FALSE;
+//						_OutputDebugString(L"unacquired tiny(nid=1) section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
+					}
+				}
+			}
+		}
+
+		//SKYサービス
+		if( this->ONID == 3 ){
+			//A2/A3
+			if( itr->second->EIT_present_following_flag == 1 ){
+				if( CheckSectionAll(&itr->second->sectionBasic, 0, &errPos, &errData) == FALSE ){
+					basicFlag = extFlag = otherBasicFlag = otherExtFlag = FALSE;
+//					_OutputDebugString(L"unacquired a2 section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
 					break;
 				}
 			}
 		}
+
+		if ( pfFlag == FALSE && basicFlag == FALSE && extFlag == FALSE && otherPfFlag == FALSE && otherBasicFlag == FALSE && otherExtFlag == FALSE ){
+			break;
+		}
 	}
 
 	if( l_eitFlag == TRUE ){
-		if( leitFlag == TRUE ){
+		if( pfFlag == TRUE ){
 //			OutputDebugString(L"EpgLEITAll\r\n");
 			status = EpgLEITAll;
 		}else{
@@ -1317,15 +1383,16 @@ EPG_SECTION_STATUS CEpgDBUtil::GetSectionStatus(BOOL l_eitFlag)
 			status = EpgNeedData;
 		}
 	}else{
-		if( basicFlag == TRUE && extFlag == TRUE ){
+		if( pfFlag == TRUE && basicFlag == TRUE && extFlag == TRUE 
+				&& otherPfFlag == TRUE && otherBasicFlag == TRUE && otherExtFlag == TRUE ){
 //			OutputDebugString(L"EpgHEITAll\r\n");
 			status = EpgHEITAll;
-		}else if( basicFlag == TRUE ){
+		}else if( basicFlag == TRUE && otherBasicFlag == TRUE ){
 //			OutputDebugString(L"EpgBasicAll\r\n");
 			status = EpgBasicAll;
-		}else if( extFlag == TRUE ){
+		//}else if( extFlag == TRUE && otherExtFlag == TRUE ){
 //			OutputDebugString(L"EpgExtendAll\r\n");
-			status = EpgExtendAll;
+		//	status = EpgExtendAll;
 		}else{
 //			OutputDebugString(L"EpgNeedData\r\n");
 			status = EpgNeedData;
@@ -1534,6 +1601,55 @@ BOOL CEpgDBUtil::AddSDT(CSDTTable* sdt)
 			}
 		}
 	}
+	if( sdt->table_id == 0x42 ){
+		if( this->ONID != sdt->original_network_id ){
+			this->ONID = sdt->original_network_id;
+			ClearSectionStatusSD();
+		}
+		if( this->TSID != sdt->transport_stream_id ){
+			this->TSID = sdt->transport_stream_id;
+		}
+	}
+
+	//セクションマップ
+	for(size_t i=0; i<sdt->serviceInfoList.size(); i++ ){
+		ULONGLONG key;
+		//SKYサービスはTSID無しのkey
+		if( sdt->original_network_id == 3 ){
+			key = _Create64Key(sdt->original_network_id, 0, sdt->serviceInfoList[i]->service_id);
+		}else{
+			key = _Create64Key(sdt->original_network_id, sdt->transport_stream_id, sdt->serviceInfoList[i]->service_id);
+		}
+		map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itrSec;
+		SECTION_STATUS_INFO* sectionInfo = NULL;
+		itrSec = this->sectionMap.find(key);
+		if( itrSec == this->sectionMap.end() ){
+			sectionInfo = new SECTION_STATUS_INFO;
+			this->sectionMap.insert(pair<ULONGLONG, SECTION_STATUS_INFO*>(key, sectionInfo));
+		}else{
+			sectionInfo = itrSec->second;
+		}
+
+		sectionInfo->EIT_present_following_flag = sdt->serviceInfoList[i]->EIT_present_following_flag;
+		sectionInfo->EIT_schedule_flag = sdt->serviceInfoList[i]->EIT_schedule_flag;
+		if( sdt->table_id == 0x46 ){
+			sectionInfo->otherStreamFlag =1;
+		}
+	}
+
+	UnLock();
+	return TRUE;
+}
+
+BOOL CEpgDBUtil::SetTDTTime(SYSTEMTIME* time)
+{
+	if( Lock() == FALSE ) return FALSE;
+
+	if( time == NULL ){
+		return FALSE;
+	}
+
+	memcpy(&this->tdtTime, time, sizeof(SYSTEMTIME));
 
 	UnLock();
 	return TRUE;
@@ -2005,6 +2121,49 @@ BOOL CEpgDBUtil::AddSDEventMap(CEITTable_SD* eit)
 
 	ULONGLONG key = _Create64Key(eit->original_network_id, 0, eit->service_id);
 
+	BOOL alreadyGot = FALSE;
+
+	//セクションステータス
+	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itrSec;
+	SECTION_STATUS_INFO* sectionInfo = NULL;
+	itrSec = this->sectionMapSD.find(key);
+	if( itrSec == this->sectionMapSD.end() ){
+		sectionInfo = new SECTION_STATUS_INFO;
+		this->sectionMapSD.insert(pair<ULONGLONG, SECTION_STATUS_INFO*>(key, sectionInfo));
+	}else{
+		sectionInfo = itrSec->second;
+	}
+
+	SECTION_FLAG_INFO* sectionFlag = NULL;
+	if( eit->table_id == 0xA4 ){
+		sectionFlag = &sectionInfo->sectionBasic;
+	}else{
+		sectionFlag = &sectionInfo->sectionExt;
+	}
+
+	//バージョン番号が替わっていたらClear
+	if( eit->version_number != sectionFlag->version[0] ){
+		if( (BYTE)~0 != sectionFlag->version[0] ){
+			sectionFlag->Clear();
+		}
+		sectionFlag->version[0] = eit->version_number;
+	}
+	//最終セクション番号
+	if( sectionFlag->last_section_number == (WORD)~0 ){
+		sectionFlag->last_section_number = eit->last_section_number;
+	}
+	//未取得のセクション？
+	if( (sectionFlag->sectionFlag[eit->section_number/64] & (1ULL<<(eit->section_number%64))) == 0 ){
+		//現在のセクション番号に該当するbitを立てる
+		sectionFlag->sectionFlag[eit->section_number/64] |= 1ULL<<eit->section_number%64;
+	}else{
+		alreadyGot = TRUE;
+	}
+	
+	if( alreadyGot ){
+		return TRUE;
+	}
+
 	//サービスのmapを取得
 	map<ULONGLONG, SERVICE_EVENT_INFO*>::iterator itr;
 	SERVICE_EVENT_INFO* serviceInfo = NULL;
@@ -2088,7 +2247,51 @@ BOOL CEpgDBUtil::AddEIT_SD2(WORD PID, CEITTable_SD2* eit)
 	}
 	if( Lock() == FALSE ) return FALSE;
 
+	bool alreadyGot = FALSE;
+
+	//セクションステータス
+	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itrSec;
+	SECTION_STATUS_INFO* sectionInfo = NULL;
+	ULONGLONG key0 = _Create64Key(eit->original_network_id, 0, eit->service_id);
+	itrSec = this->sectionMap.find(key0);
+	if( itrSec == this->sectionMap.end() ){
+		sectionInfo = new SECTION_STATUS_INFO;
+		this->sectionMap.insert(pair<ULONGLONG, SECTION_STATUS_INFO*>(key0, sectionInfo));
+	}else{
+		sectionInfo = itrSec->second;
+	}
+	//バージョン番号が替わっていたらClear
+	if( (BYTE)~0 != sectionInfo->sectionBasic.version[0] && sectionInfo->sectionBasic.version[0] != eit->version_number ){
+		sectionInfo->sectionBasic.Clear();
+	}
+	//取得済のセクション?
+	if ( (sectionInfo->sectionBasic.sectionFlag[eit->section_number/64] & (1ULL<<(eit->section_number%64))) != 0 ){
+		alreadyGot = TRUE;
+	}
+	
+	if( alreadyGot ){
+		UnLock();
+		return NO_ERR;
+	}
+
 	ULONGLONG key = _Create64Key(eit->original_network_id, 0, eit->service_id2);
+
+	//A4/A7セクションステータスの確認
+	BOOL existInfo = FALSE;
+	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itrSec2;
+	SECTION_STATUS_INFO* sectionInfo2 = NULL;
+	itrSec2 = this->sectionMapSD.find(key);
+	if( itrSec2 != this->sectionMapSD.end() ){
+		sectionInfo2 = itrSec2->second;
+		if( CheckSectionAll(&sectionInfo2->sectionBasic, 0, NULL,NULL) == TRUE && CheckSectionAll(&sectionInfo2->sectionExt, 0, NULL,NULL) == TRUE ){
+			existInfo = TRUE;
+		}
+	}
+
+	if( !existInfo ){
+		UnLock();
+		return NO_ERR;
+	}
 
 	//サービスのmapを取得
 	map<ULONGLONG, SERVICE_EVENT_INFO*>::iterator itr;
@@ -2097,6 +2300,7 @@ BOOL CEpgDBUtil::AddEIT_SD2(WORD PID, CEITTable_SD2* eit)
 	itr = serviceEventMapSD.find(key);
 	if( itr != serviceEventMapSD.end() ){
 		serviceInfo = itr->second;
+		BOOL foundAll = TRUE;
 		for( size_t i=0; i<eit->eventMapList.size(); i++ ){
 			for( size_t j=0; j<eit->eventMapList[i]->eventList.size(); j++ ){
 				map<WORD, EVENT_INFO*>::iterator itrEvent;
@@ -2159,11 +2363,37 @@ BOOL CEpgDBUtil::AddEIT_SD2(WORD PID, CEITTable_SD2* eit)
 						*eventInfo->audioInfo = *itrEvent->second->audioInfo;
 					}
 
+				}else{
+					foundAll = FALSE;
 				}
 			}
+		}
+
+		//全て登録できたらセクションステータス更新
+		if( foundAll == TRUE ){
+			//バージョン番号
+			if( (WORD)~0 == sectionInfo->sectionBasic.version[0] ){
+				sectionInfo->sectionBasic.version[0] = eit->version_number;
+			}
+			//最終セクション番号
+			if( (WORD)~0 == sectionInfo->sectionBasic.last_section_number ){
+				sectionInfo->sectionBasic.last_section_number = eit->last_section_number;
+			}
+			//現在のセクション番号に該当するbitを立てる
+			sectionInfo->sectionBasic.sectionFlag[eit->section_number/64] |= 1ULL<<(eit->section_number%64);
 		}
 	}
 
 	UnLock();
 	return NO_ERR;
 }
+
+void CEpgDBUtil::ClearSectionStatusSD()
+{
+	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itr;
+	for( itr = this->sectionMapSD.begin(); itr != this->sectionMapSD.end(); itr++ ){
+		SAFE_DELETE(itr->second);
+	}
+	this->sectionMapSD.clear();
+}
+

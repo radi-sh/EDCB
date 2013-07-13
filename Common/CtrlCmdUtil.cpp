@@ -3597,6 +3597,7 @@ DWORD GetVALUESize( SET_CH_INFO* val )
 	size += GetVALUESize(val->useBonCh);
 	size += GetVALUESize(val->space);
 	size += GetVALUESize(val->ch);
+	size += GetVALUESize(val->swBasic);
 
 	return size;
 }
@@ -3641,6 +3642,10 @@ BOOL WriteVALUE( SET_CH_INFO* val, BYTE* buff, DWORD buffSize, DWORD* writeSize 
 		}
 		pos += size;
 		if( WriteVALUE( val->ch, buff + pos, buffSize - pos, &size ) == FALSE ){
+			return FALSE;
+		}
+		pos += size;
+		if( WriteVALUE( val->swBasic, buff + pos, buffSize - pos, &size ) == FALSE ){
 			return FALSE;
 		}
 		pos += size;
@@ -3695,6 +3700,10 @@ BOOL ReadVALUE( SET_CH_INFO* val, BYTE* buff, DWORD buffSize, DWORD* readSize )
 		}
 		pos += size;
 		if( ReadVALUE( &val->ch, buff + pos, buffSize - pos, &size ) == FALSE ){
+			return FALSE;
+		}
+		pos += size;
+		if( ReadVALUE( &val->swBasic, buff + pos, buffSize - pos, &size ) == FALSE ){
 			return FALSE;
 		}
 		pos += size;

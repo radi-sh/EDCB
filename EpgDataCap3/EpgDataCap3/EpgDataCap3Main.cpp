@@ -136,6 +136,15 @@ DWORD CEpgDataCap3Main::GetServiceListActual(
 	return err;
 }
 
+//ストリームの変更を通知する
+void CEpgDataCap3Main::SetStreamChangeEvent()
+{
+	if( Lock() == FALSE ) return ;
+	this->decodeUtilClass.SetStreamChangeEvent();
+	UnLock();
+	return ;
+}
+
 //蓄積されたEPG情報のあるサービス一覧を取得する
 //SERVICE_EXT_INFOの情報はない場合がある
 //戻り値：

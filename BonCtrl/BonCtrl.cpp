@@ -471,7 +471,7 @@ DWORD CBonCtrl::_SetCh(
 		Sleep(twiceSetChWait);
 		ret = this->bonUtil.SetCh(space, ch);
 	}
-
+	this->tsOut.SetAfterChChangeEvent(chScan);
 	StartBackgroundEpgCap();
 
 	return ret;
@@ -632,29 +632,33 @@ UINT WINAPI CBonCtrl::RecvThread(LPVOID param)
 					TS_DATA* item = new TS_DATA;
 					try{
 						if( sys->packetInit.GetTSData(data, size, &item->data, &item->size) == TRUE ){
-							if( WaitForSingleObject( sys->buffLockEvent, 50000 ) == WAIT_OBJECT_0 ){
-								if(sys->TSBuff.size() > sys->tsBuffMaxCount){
-									size_t startIndex = sys->tsBuffMaxCount;
-									if( sys->tsBuffMaxCount < 1000 ){
-										startIndex = 0;
-									}else{
-										startIndex -= 1000;
-									}
-									for( size_t i=startIndex; i<sys->TSBuff.size(); i++ ){
-										SAFE_DELETE(sys->TSBuff[i]);
-									}
-									vector<TS_DATA*>::iterator itr;
-									itr = sys->TSBuff.begin();
-									advance(itr,startIndex);
-									sys->TSBuff.erase( itr, sys->TSBuff.end() );
-								}
-								sys->TSBuff.push_back(item);
-								if( sys->buffLockEvent != NULL ){
-									SetEvent(sys->buffLockEvent);
-								}
-							}else{
+							if( sys->tsOut.NeedPurge() == TRUE ){
 								delete item;
-								_OutputDebugString(L"★★Buff Write TimeOut");
+							}else{
+								if( WaitForSingleObject( sys->buffLockEvent, 50000 ) == WAIT_OBJECT_0 ){
+									if(sys->TSBuff.size() > sys->tsBuffMaxCount){
+										size_t startIndex = sys->tsBuffMaxCount;
+										if( sys->tsBuffMaxCount < 1000 ){
+											startIndex = 0;
+										}else{
+											startIndex -= 1000;
+										}
+										for( size_t i=startIndex; i<sys->TSBuff.size(); i++ ){
+											SAFE_DELETE(sys->TSBuff[i]);
+										}
+										vector<TS_DATA*>::iterator itr;
+										itr = sys->TSBuff.begin();
+										advance(itr,startIndex);
+										sys->TSBuff.erase( itr, sys->TSBuff.end() );
+									}
+									sys->TSBuff.push_back(item);
+									if( sys->buffLockEvent != NULL ){
+										SetEvent(sys->buffLockEvent);
+									}
+								}else{
+									delete item;
+									_OutputDebugString(L"★★Buff Write TimeOut");
+								}
 							}
 						}else{
 							delete item;
@@ -719,15 +723,19 @@ UINT WINAPI CBonCtrl::AnalyzeThread(LPVOID param)
 		}catch(...){
 			_OutputDebugString(L"★★AnalyzeThread Exception1");
 			if( data != NULL ){
-				sys->tsOut.AddTSBuff(data);
-				SAFE_DELETE(data);
+				if( sys->tsOut.NeedPurge() == FALSE ){
+					sys->tsOut.AddTSBuff(data);
+					SAFE_DELETE(data);
+				}
 			}
 			continue ;
 		}
 		try{
 			if( data != NULL ){
-				sys->tsOut.AddTSBuff(data);
-				SAFE_DELETE(data);
+				if( sys->tsOut.NeedPurge() == FALSE ){
+					sys->tsOut.AddTSBuff(data);
+					SAFE_DELETE(data);
+				}
 			}else{
 				Sleep(5);
 			}
@@ -1268,6 +1276,7 @@ UINT WINAPI CBonCtrl::ChScanThread(LPVOID param)
 	DWORD chkWait = 0;
 	DWORD chkCount = 0;
 	BOOL firstChg = FALSE;
+	BOOL chChanging = FALSE;
 
 	while(1){
 		if( ::WaitForSingleObject(sys->chScanStopEvent, wait) != WAIT_TIMEOUT ){
@@ -1279,26 +1288,36 @@ UINT WINAPI CBonCtrl::ChScanThread(LPVOID param)
 			sys->chSt_space = chkList[chkCount].space;
 			sys->chSt_ch = chkList[chkCount].ch;
 			sys->chSt_chName = chkList[chkCount].chName;
-			sys->_SetCh(chkList[chkCount].space, chkList[chkCount].ch, TRUE);
-			if( firstChg == FALSE ){
-				firstChg = TRUE;
-				sys->tsOut.ResetChChange();
+			DWORD ret = sys->_SetCh(chkList[chkCount].space, chkList[chkCount].ch, TRUE);
+			if( ret != NO_ERR ){
+				OutputDebugString(L"★AutoScan SetCh error\r\n");
+				chkNext = TRUE;
+			}else{
+				if( firstChg == FALSE ){
+					firstChg = TRUE;
+					sys->tsOut.ResetChChange();
+				}
+				startTime = GetTimeCount();
+				chkNext = FALSE;
+				wait = 100;
+				chkWait = chChgTimeOut;
+				chChanging= TRUE;
 			}
-			startTime = GetTimeCount();
-			chkNext = FALSE;
-			wait = 1000;
-			chkWait = chChgTimeOut;
 		}else{
 			BOOL chChgErr = FALSE;
-			if( sys->tsOut.IsChChanging(&chChgErr) == TRUE ){
-				if( startTime + chkWait < GetTimeCount() ){
+			if( chChanging == TRUE && (sys->tsOut.IsChChanging(&chChgErr) == TRUE || chChgErr == TRUE) ){
+				if( startTime + chkWait < GetTimeCount() || chChgErr == TRUE ){
 					//チャンネル切り替えに8秒以上かかってるので無信号と判断
 					OutputDebugString(L"★AutoScan Ch Change timeout\r\n");
 					chkNext = TRUE;
 				}
 			}else{
-				if( startTime + chkWait+serviceChkTimeOut < GetTimeCount() || chChgErr == TRUE){
-					//チャンネル切り替え成功したけどサービス一覧とれないので無信号と判断
+				if( chChanging == TRUE ){
+					startTime = GetTimeCount();
+					chChanging = FALSE;
+				}
+				if( startTime + serviceChkTimeOut < GetTimeCount() ){
+					//サービス一覧とれない
 					OutputDebugString(L"★AutoScan GetService timeout\r\n");
 					chkNext = TRUE;
 				}else{
@@ -1322,16 +1341,17 @@ UINT WINAPI CBonCtrl::ChScanThread(LPVOID param)
 					}
 				}
 			}
-			if( chkNext == TRUE ){
-				//次のチャンネルへ
-				chkCount++;
-				sys->chSt_chkNum++;
-				if( sys->chSt_totalNum <= chkCount ){
-					//全部チェック終わったので終了
-					sys->chSt_err = ST_COMPLETE;
-					sys->chUtil.SaveChSet(chSet4, chSet5);
-					break;
-				}
+		}
+		if( chkNext == TRUE ){
+			//次のチャンネルへ
+			chkCount++;
+			wait = 0;
+			sys->chSt_chkNum++;
+			if( sys->chSt_totalNum <= chkCount ){
+				//全部チェック終わったので終了
+				sys->chSt_err = ST_COMPLETE;
+				sys->chUtil.SaveChSet(chSet4, chSet5);
+				break;
 			}
 		}
 	}
@@ -1474,6 +1494,14 @@ UINT WINAPI CBonCtrl::EpgCapThread(LPVOID param)
 	BOOL chkBS = FALSE;
 	BOOL chkCS1 = FALSE;
 	BOOL chkCS2 = FALSE;
+	BOOL chkSPHD = FALSE;
+	BOOL chkSPSD1 = FALSE;
+	BOOL chkSPSD2 = FALSE;
+	BOOL leitFlag = FALSE;
+
+	EPGCAP_SERVICE_INFO chSPSD1 = { 0x0001, 0x0017, 0x00C8 };
+	EPGCAP_SERVICE_INFO chSPSD2 = { 0x0003, 0x110B, 0x40CA };
+	EPGCAP_SERVICE_INFO epgCh;
 
 	wstring folderPath;
 	GetModuleFolderPath( folderPath );
@@ -1499,20 +1527,40 @@ UINT WINAPI CBonCtrl::EpgCapThread(LPVOID param)
 			}
 			DWORD space = 0;
 			DWORD ch = 0;
-			sys->chUtil.GetCh(sys->epgCapChList[chkCount].ONID, sys->epgCapChList[chkCount].TSID, space, ch);
-			sys->_SetCh(space, ch);
+			// PerfecTVサービスならch200での取得を試みる
+			if( sys->epgCapChList[chkCount].ONID == 0x0001 && sys->chUtil.IsEpgCapService(chSPSD1.ONID, chSPSD1.TSID) == TRUE 
+					&& sys->chUtil.GetCh(chSPSD1.ONID, chSPSD1.TSID, space, ch) == TRUE ){
+				sys->_SetCh(space, ch);
+				epgCh = chSPSD1;
+				chkSPSD1 = TRUE;
+				wait = 10*1000;
+			// SKYサービスならch202での取得を試みる
+			}else if( sys->epgCapChList[chkCount].ONID == 0x0003 && sys->chUtil.IsEpgCapService(chSPSD2.ONID, chSPSD2.TSID) == TRUE 
+					&& sys->chUtil.GetCh(chSPSD2.ONID, chSPSD2.TSID, space, ch) == TRUE ){
+				sys->_SetCh(space, ch);
+				epgCh = chSPSD2;
+				chkSPSD2 = TRUE;
+				wait = 10*1000;
+			}else{
+				sys->chUtil.GetCh(sys->epgCapChList[chkCount].ONID, sys->epgCapChList[chkCount].TSID, space, ch);
+				sys->_SetCh(space, ch);
+				epgCh = sys->epgCapChList[chkCount];
+				wait = 60*1000;
+			}
+			sys->epgSt_ch = epgCh;
+			leitFlag = sys->chUtil.IsPartial(epgCh.ONID, epgCh.SID, epgCh.SID);
 			startTime = GetTimeCount();
 			chkNext = FALSE;
 			startCap = FALSE;
-			wait = 1000;
-			if( sys->epgCapChList[chkCount].ONID == 4 ){
+			if( epgCh.ONID == 4 ){
 				chkBS = TRUE;
-			}else if( sys->epgCapChList[chkCount].ONID == 6 ){
+			}else if( epgCh.ONID == 6 ){
 				chkCS1 = TRUE;
-			}else if( sys->epgCapChList[chkCount].ONID == 7 ){
+			}else if( epgCh.ONID == 7 ){
 				chkCS2 = TRUE;
+			}else if( epgCh.ONID == 10 ){
+				chkSPHD = TRUE;
 			}
-			sys->epgSt_ch = sys->epgCapChList[chkCount];
 		}else{
 			BOOL chChgErr = FALSE;
 			if( sys->tsOut.IsChChanging(&chChgErr) == TRUE ){
@@ -1533,24 +1581,35 @@ UINT WINAPI CBonCtrl::EpgCapThread(LPVOID param)
 						//取得開始
 						startCap = TRUE;
 						wstring epgDataPath = L"";
-						sys->GetEpgDataFilePath(sys->epgCapChList[chkCount].ONID, sys->epgCapChList[chkCount].TSID, epgDataPath);
+						sys->GetEpgDataFilePath(epgCh.ONID, epgCh.TSID, epgDataPath);
 						sys->tsOut.StartSaveEPG(epgDataPath);
 						sys->tsOut.ClearSectionStatus();
-						wait = 60*1000;
+						wait = 5*1000;
 					}else{
 						//蓄積状態チェック
-						BOOL leitFlag = sys->chUtil.IsPartial(sys->epgCapChList[chkCount].ONID, sys->epgCapChList[chkCount].TSID, sys->epgCapChList[chkCount].SID);
 						EPG_SECTION_STATUS status = sys->tsOut.GetSectionStatus(leitFlag);
-						if( sys->epgCapChList[chkCount].ONID == 4 && sys->BSBasic == TRUE ){
+						if( epgCh.ONID == 4 && sys->BSBasic == TRUE ){
+							if( status == EpgHEITAll || status == EpgHEITAll  ){
+								chkNext = TRUE;
+							}
+						}else if( epgCh.ONID == 6 && sys->CS1Basic == TRUE ){
 							if( status == EpgBasicAll || status == EpgHEITAll ){
 								chkNext = TRUE;
 							}
-						}else if( sys->epgCapChList[chkCount].ONID == 6 && sys->CS1Basic == TRUE ){
+						}else if( epgCh.ONID == 7 && sys->CS2Basic == TRUE ){
 							if( status == EpgBasicAll || status == EpgHEITAll ){
 								chkNext = TRUE;
 							}
-						}else if( sys->epgCapChList[chkCount].ONID == 7 && sys->CS2Basic == TRUE ){
+						}else if( epgCh.ONID == 10 ){
 							if( status == EpgBasicAll || status == EpgHEITAll ){
+								chkNext = TRUE;
+							}
+						}else if( epgCh.ONID == 1 ){
+							if( status == EpgHEITAll ){
+								chkNext = TRUE;
+							}
+						}else if( epgCh.ONID == 3 ){
+							if( status == EpgHEITAll ){
 								chkNext = TRUE;
 							}
 						}else{
@@ -1564,7 +1623,7 @@ UINT WINAPI CBonCtrl::EpgCapThread(LPVOID param)
 							sys->tsOut.StopSaveEPG(TRUE);
 							wait = 0;
 						}else{
-							wait = 10*1000;
+							wait = 5*1000;
 						}
 					}
 				}
@@ -1572,52 +1631,45 @@ UINT WINAPI CBonCtrl::EpgCapThread(LPVOID param)
 			if( chkNext == TRUE ){
 				//次のチャンネルへ
 				chkCount++;
+				while( chkCount<(DWORD)sys->epgCapChList.size() ){
+					//BS 1チャンネルのみ？
+					if( sys->BSBasic == TRUE && chkBS == TRUE && sys->epgCapChList[chkCount].ONID == 4 ){
+						chkCount++;
+						continue;
+					}
+					//CS1 1チャンネルのみ？
+					if( sys->CS1Basic == TRUE && chkCS1 == TRUE && sys->epgCapChList[chkCount].ONID == 6 ){
+						chkCount++;
+						continue;
+					}
+					//CS2 1チャンネルのみ？
+					if( sys->CS2Basic == TRUE && chkCS2 == TRUE && sys->epgCapChList[chkCount].ONID == 7 ){
+						chkCount++;
+						continue;
+					}
+					//スカパー！プレミアムHD 1チャンネル取得済
+					if( chkSPHD == TRUE && sys->epgCapChList[chkCount].ONID == 10 ){
+						chkCount++;
+						continue;
+					}
+					//PerfecTVサービス プロモチャンネル取得済
+					if( chkSPSD1 == TRUE && sys->epgCapChList[chkCount].ONID == 1 ){
+						chkCount++;
+						continue;
+					}
+					//SKYサービス プロモチャンネル取得済
+					if( chkSPSD2 == TRUE && sys->epgCapChList[chkCount].ONID == 3 ){
+						chkCount++;
+						continue;
+					}
+
+					break;
+				}
+
 				if( sys->epgCapChList.size() <= chkCount ){
 					//全部チェック終わったので終了
 					sys->epgSt_err = ST_COMPLETE;
 					return 0;
-				}
-				//BS 1チャンネルのみ？
-				if( sys->epgCapChList[chkCount].ONID == 4 && sys->BSBasic == TRUE && chkBS == TRUE){
-					while(chkCount<(DWORD)sys->epgCapChList.size()){
-						if( sys->epgCapChList[chkCount].ONID != 4 ){
-							break;
-						}
-						chkCount++;
-						if( sys->epgCapChList.size() <= chkCount ){
-							//全部チェック終わったので終了
-							sys->epgSt_err = ST_COMPLETE;
-							return 0;
-						}
-					}
-				}
-				//CS1 1チャンネルのみ？
-				if( sys->epgCapChList[chkCount].ONID == 6 && sys->CS1Basic == TRUE && chkCS1 == TRUE ){
-					while(chkCount<(DWORD)sys->epgCapChList.size()){
-						if( sys->epgCapChList[chkCount].ONID != 6 ){
-							break;
-						}
-						chkCount++;
-						if( sys->epgCapChList.size() <= chkCount ){
-							//全部チェック終わったので終了
-							sys->epgSt_err = ST_COMPLETE;
-							return 0;
-						}
-					}
-				}
-				//CS2 1チャンネルのみ？
-				if( sys->epgCapChList[chkCount].ONID == 7 && sys->CS2Basic == TRUE && chkCS2 == TRUE ){
-					while(chkCount<(DWORD)sys->epgCapChList.size()){
-						if( sys->epgCapChList[chkCount].ONID != 7 ){
-							break;
-						}
-						chkCount++;
-						if( sys->epgCapChList.size() <= chkCount ){
-							//全部チェック終わったので終了
-							sys->epgSt_err = ST_COMPLETE;
-							return 0;
-						}
-					}
 				}
 			}
 		}
@@ -1636,6 +1688,12 @@ void CBonCtrl::GetEpgDataFilePath(WORD ONID, WORD TSID, wstring& epgDataFilePath
 	}else if( ONID == 6 && this->CS1Basic == TRUE ){
 		Format(epgDataFilePath, L"%s\\%04XFFFF_epg.dat", epgDataFolderPath.c_str(), ONID);
 	}else if( ONID == 7 && this->CS2Basic == TRUE ){
+		Format(epgDataFilePath, L"%s\\%04XFFFF_epg.dat", epgDataFolderPath.c_str(), ONID);
+	}else if( ONID == 10 ){
+		Format(epgDataFilePath, L"%s\\%04XFFFF_epg.dat", epgDataFolderPath.c_str(), ONID);
+	}else if( ONID == 1 && TSID == 0x0017 ){
+		Format(epgDataFilePath, L"%s\\%04XFFFF_epg.dat", epgDataFolderPath.c_str(), ONID);
+	}else if( ONID == 3 && TSID == 0x110B ){
 		Format(epgDataFilePath, L"%s\\%04XFFFF_epg.dat", epgDataFolderPath.c_str(), ONID);
 	}else{
 		Format(epgDataFilePath, L"%s\\%04X%04X_epg.dat", epgDataFolderPath.c_str(), ONID, TSID);
@@ -1789,7 +1847,7 @@ UINT WINAPI CBonCtrl::EpgCapBackThread(LPVOID param)
 	sys->tsOut.StartSaveEPG(epgDataPath);
 	sys->tsOut.ClearSectionStatus();
 
-	if( ::WaitForSingleObject(sys->epgCapBackStopEvent, 60*1000) != WAIT_TIMEOUT ){
+	if( ::WaitForSingleObject(sys->epgCapBackStopEvent, 10*1000) != WAIT_TIMEOUT ){
 		//キャンセルされた
 		sys->tsOut.StopSaveEPG(FALSE);
 		return 0;
@@ -1809,6 +1867,18 @@ UINT WINAPI CBonCtrl::EpgCapBackThread(LPVOID param)
 			}
 		}else if( ONID == 7 && sys->CS2Basic == TRUE ){
 			if( status == EpgBasicAll || status == EpgHEITAll ){
+				chkNext = TRUE;
+			}
+		}else if( ONID == 10 ){
+			if( status == EpgBasicAll || status == EpgHEITAll ){
+				chkNext = TRUE;
+			}
+		}else if( ONID == 1 ){
+			if( status == EpgHEITAll ){
+				chkNext = TRUE;
+			}
+		}else if( ONID == 3 ){
+			if( status == EpgHEITAll ){
 				chkNext = TRUE;
 			}
 		}else{

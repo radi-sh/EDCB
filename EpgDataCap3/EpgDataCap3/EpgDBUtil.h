@@ -118,28 +118,32 @@ typedef struct _SERVICE_EVENT_INFO{
 } SERVICE_EVENT_INFO;
 
 typedef struct _SECTION_FLAG_INFO{
-	DWORD sectionFlag;
-	DWORD maxFlag;
+	ULONGLONG sectionFlag[32];	//そのセクションが取得済かどうかのbitmap
+	WORD last_section_number;	//最終のセクション通し番号
+	BYTE version[8];			//バージョン番号[サブテーブル番号]
+	void Clear(){
+		memset(&sectionFlag, 0, sizeof(sectionFlag));
+		last_section_number = (WORD)~0;
+		for( int i=0; i<8; i++ ){
+			version[i] = (BYTE)~0;
+		}
+	}
 	_SECTION_FLAG_INFO(void){
-		sectionFlag = 0;
-		maxFlag = 0;
+		_SECTION_FLAG_INFO::Clear();
 	};
 }SECTION_FLAG_INFO;
 
 typedef struct _SECTION_STATUS_INFO{
-	BYTE HEITFlag;
-	BYTE last_section_numberBasic;
-	BYTE last_table_idBasic;
-	BYTE last_section_numberExt;
-	BYTE last_table_idExt;
-	map<WORD, SECTION_FLAG_INFO> sectionBasicMap;	//キー TableID、フラグ
-	map<WORD, SECTION_FLAG_INFO> sectionExtMap;	//キー TableID、フラグ
+	BYTE EIT_schedule_flag;				//EIT(スケジュール)が提供されている
+	BYTE EIT_present_following_flag;	//EIT(p/f)が提供されている
+	BYTE otherStreamFlag;				//1=他ストリーム
+	SECTION_FLAG_INFO sectionBasic;		//基本情報のセクションフラグ
+	SECTION_FLAG_INFO sectionExt;		//拡張情報のセクションフラグ
+	SECTION_FLAG_INFO sectionPF;		//p/fのセクションフラグ
 	_SECTION_STATUS_INFO(void){
-		HEITFlag = TRUE;
-		last_section_numberBasic = 0;
-		last_table_idBasic = 0;
-		last_section_numberExt = 0;
-		last_table_idExt = 0;
+		EIT_schedule_flag = 0;
+		EIT_present_following_flag = 0;
+		otherStreamFlag = 0;
 	};
 }SECTION_STATUS_INFO;
 
@@ -156,6 +160,8 @@ public:
 	BOOL AddServiceList(CNITTable* nit);
 	BOOL AddServiceList(WORD TSID, CSITTable* sit);
 	BOOL AddSDT(CSDTTable* sdt);
+
+	BOOL SetTDTTime(SYSTEMTIME* time);
 
 	void SetStreamChangeEvent();
 
@@ -244,6 +250,7 @@ protected:
 	map<ULONGLONG, BYTE> serviceList;
 
 	map<ULONGLONG, SERVICE_EVENT_INFO*> serviceEventMapSD;
+	map<ULONGLONG, SECTION_STATUS_INFO*> sectionMapSD;
 
 
 	typedef struct _DB_SERVICE_INFO{
@@ -285,8 +292,6 @@ protected:
 	}DB_TS_INFO;
 	map<DWORD, DB_TS_INFO*> serviceInfoList;
 
-	DWORD sectionNowFlag;
-
 	DWORD epgInfoListSize;
 	EPG_EVENT_INFO* epgInfoList;
 
@@ -299,6 +304,10 @@ protected:
 
 	DWORD serviceDBListSize;
 	SERVICE_INFO* serviceDBList;
+
+	WORD ONID;
+	WORD TSID;
+	SYSTEMTIME tdtTime;
 protected:
 	//PublicAPI排他制御用
 	BOOL Lock(LPCWSTR log = NULL, DWORD timeOut = 60*1000);
@@ -323,8 +332,7 @@ protected:
 	BOOL CheckUpdate_SD(CEITTable_SD* eit, BYTE tableID, BYTE version);
 
 	BOOL AddSDEventMap(CEITTable_SD* eit);
-
-	BOOL CheckSectionAll(map<WORD, SECTION_FLAG_INFO>* sectionMap, BOOL leitFlag = FALSE);
+	void ClearSectionStatusSD();
 
 	void CopyEpgInfo(EPG_EVENT_INFO* destInfo, EVENT_INFO* srcInfo);
 };

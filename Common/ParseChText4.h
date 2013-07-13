@@ -81,6 +81,25 @@ public:
 		LPCWSTR filePath = NULL
 		);
 	
+	//ONID、TSID、SID、space、chが一致するチャンネル情報を検索
+	//戻り値：
+	// TRUE（成功）、FALSE（失敗）
+	//引数：
+	// searchInfo			[IN]検索するONID、TSID、SID、space、ch
+	// *foundInfo			[OUT]検索したチャンネル情報
+	BOOL FindChService(
+		CH_DATA4 searchInfo,
+		CH_DATA4* foundInfo);
+
+	//チャンネル情報を変更する
+	//戻り値：
+	// TRUE（成功）、FALSE（失敗）
+	//引数：
+	// ch_info			[IN]変更するチャンネル情報
+	BOOL ChangeCh(
+		CH_DATA4 chInfo
+		);
+	
 	CParseChText4& operator=(const CParseChText4& o)
 	{
 		chList = o.chList;
@@ -92,6 +111,7 @@ protected:
 
 protected:
 	BOOL Parse1Line(string parseLine, CH_DATA4* chInfo );
+	BOOL _FindChService(CH_DATA4 searchInfo, CH_DATA4** foundP );
 };
 
 #endif

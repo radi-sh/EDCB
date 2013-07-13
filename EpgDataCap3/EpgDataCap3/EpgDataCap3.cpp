@@ -155,6 +155,22 @@ DWORD WINAPI GetServiceListActualEP(
 	return itr->second->GetServiceListActual(serviceListSize, serviceList);
 }
 
+//ストリームの変更を通知する
+//引数：
+// id						[IN]識別ID
+void WINAPI SetStreamChangeEventEP(
+	DWORD id
+	)
+{
+	map<DWORD, CEpgDataCap3Main*>::iterator itr;
+	itr = g_List.find(id);
+	if( itr == g_List.end() ){
+		return;
+	}
+
+	itr->second->SetStreamChangeEvent();
+}
+
 //蓄積されたEPG情報のあるサービス一覧を取得する
 //SERVICE_EXT_INFOの情報はない場合がある
 //戻り値：

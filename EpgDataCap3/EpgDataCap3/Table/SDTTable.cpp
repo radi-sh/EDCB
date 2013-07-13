@@ -92,29 +92,26 @@ BOOL CSDTTable::Decode( BYTE* data, DWORD dataSize, DWORD* decodeReadSize )
 			item->free_CA_mode = (data[readSize+3]&0x10)>>4;
 			item->descriptors_loop_length = ((WORD)data[readSize+3]&0x0F)<<8 | data[readSize+4];
 			readSize += 5;
-			BOOL err = FALSE;
+			BOOL err = TRUE;
 			if( readSize+item->descriptors_loop_length <= (DWORD)section_length+3-4 && item->descriptors_loop_length > 0){
 				if( original_network_id == 0x0001 || original_network_id == 0x0003){
-					if( SDDecode( data+readSize, item->descriptors_loop_length, &(item->descriptorList), NULL ) == FALSE ){
-						err = TRUE;
-					}else{
-						serviceInfoList.push_back(item);
+					if( SDDecode( data+readSize, item->descriptors_loop_length, &(item->descriptorList), NULL ) == TRUE ){
+						err = FALSE;
 					}
-				}else{
-					CDescriptor descriptor;
-					if( descriptor.Decode( data+readSize, item->descriptors_loop_length, &(item->descriptorList), NULL ) == FALSE ){
-						_OutputDebugString( L"++CSDTTable:: descriptor2 err" );
-						SAFE_DELETE(item);
-						return FALSE;
-					}
-					serviceInfoList.push_back(item);
+				}
+				CDescriptor descriptor;
+				if( descriptor.Decode( data+readSize, item->descriptors_loop_length, &(item->descriptorList), NULL ) == TRUE ){
+					err = FALSE;
 				}
 			}
 
 			readSize+=item->descriptors_loop_length;
 			if( err == TRUE ){
+				_OutputDebugString( L"++CSDTTable:: descriptor2 err" );
 				SAFE_DELETE(item);
+				return FALSE;
 			}
+			serviceInfoList.push_back(item);
 
 		}
 	}else{
@@ -145,9 +142,9 @@ BOOL CSDTTable::SDDecode( BYTE* data, DWORD dataSize, vector<DESCRIPTOR_DATA*>* 
 		if( readPos[0] == 0x8A ){
 			//サービスタイプ
 			item->service->service_type = readPos[2];
-			if( item->service->service_type == 0x81 ){
-				item->service->service_type = 0xA1;
-			}
+			//if( item->service->service_type == 0x81 ){
+			//	item->service->service_type = 0xA1;
+			//}
 			decodeSize += readPos[1]+2;
 		}else
 		if( readPos[0] == 0x82 ){

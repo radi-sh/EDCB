@@ -7,6 +7,8 @@
 
 CDecodeUtil::CDecodeUtil(void)
 {
+	this->lockEvent = _CreateEvent(FALSE, TRUE, NULL);
+
 	this->epgDBUtil = NULL;
 
 	this->patInfo = NULL;
@@ -28,11 +30,44 @@ CDecodeUtil::~CDecodeUtil(void)
 {
 	Clear();
 	SAFE_DELETE_ARRAY(this->serviceList);
+
+	if( this->lockEvent != NULL ){
+		UnLock();
+		CloseHandle(this->lockEvent);
+		this->lockEvent = NULL;
+	}
+
 }
 
 void CDecodeUtil::SetEpgDB(CEpgDBUtil* epgDBUtil)
 {
 	this->epgDBUtil = epgDBUtil;
+}
+
+BOOL CDecodeUtil::Lock(LPCWSTR log, DWORD timeOut)
+{
+	if( this->lockEvent == NULL ){
+		return FALSE;
+	}
+	if( log != NULL ){
+		OutputDebugString(log);
+	}
+	DWORD dwRet = WaitForSingleObject(this->lockEvent, timeOut);
+	if( dwRet == WAIT_ABANDONED || 
+		dwRet == WAIT_FAILED){
+		return FALSE;
+	}
+	return TRUE;
+}
+
+void CDecodeUtil::UnLock(LPCWSTR log)
+{
+	if( this->lockEvent != NULL ){
+		SetEvent(this->lockEvent);
+	}
+	if( log != NULL ){
+		OutputDebugString(log);
+	}
 }
 
 void CDecodeUtil::Clear()
@@ -237,6 +272,8 @@ BOOL CDecodeUtil::CheckPAT(WORD PID, CPATTable* pat)
 		return FALSE;
 	}
 
+	if( Lock() == FALSE ) return FALSE;
+
 	if( this->patInfo == NULL ){
 		//初回
 		this->patInfo = pat;
@@ -251,9 +288,11 @@ BOOL CDecodeUtil::CheckPAT(WORD PID, CPATTable* pat)
 			this->patInfo = pat;
 		}else{
 			//変更なし
+			UnLock();
 			return FALSE;
 		}
 	}
+	UnLock();
 	return TRUE;
 }
 
@@ -262,6 +301,8 @@ BOOL CDecodeUtil::CheckCAT(WORD PID, CCATTable* cat)
 	if( cat == NULL ){
 		return FALSE;
 	}
+
+	if( Lock() == FALSE ) return FALSE;
 
 	if( this->catInfo == NULL ){
 		//初回
@@ -273,9 +314,11 @@ BOOL CDecodeUtil::CheckCAT(WORD PID, CCATTable* cat)
 			this->catInfo = cat;
 		}else{
 			//変更なし
+			UnLock();
 			return FALSE;
 		}
 	}
+	UnLock();
 	return TRUE;
 }
 
@@ -284,6 +327,8 @@ BOOL CDecodeUtil::CheckPMT(WORD PID, CPMTTable* pmt)
 	if( pmt == NULL ){
 		return FALSE;
 	}
+
+	if( Lock() == FALSE ) return FALSE;
 
 	map<WORD, CPMTTable*>::iterator itrPmt;
 	itrPmt = this->pmtMap.find(PID);
@@ -299,10 +344,12 @@ BOOL CDecodeUtil::CheckPMT(WORD PID, CPMTTable* pmt)
 			this->pmtMap.insert(pair<WORD, CPMTTable*>(PID, pmt));
 		}else{
 			//変更なし
+			UnLock();
 			return FALSE;
 		}
 	}
 
+	UnLock();
 	return TRUE;
 }
 
@@ -315,6 +362,8 @@ BOOL CDecodeUtil::CheckNIT(WORD PID, CNITTable* nit)
 	if( epgDBUtil != NULL ){
 		epgDBUtil->AddServiceList(nit);
 	}
+
+	if( Lock() == FALSE ) return FALSE;
 
 	if( nit->table_id == 0x40 ){
 		//自ネットワーク
@@ -375,8 +424,10 @@ BOOL CDecodeUtil::CheckNIT(WORD PID, CNITTable* nit)
 								itr = this->nitActualInfo->nitSection.find(nit->section_number);
 								if( itr == this->nitActualInfo->nitSection.end() ){
 									this->nitActualInfo->nitSection.insert(pair<BYTE, CNITTable*>(nit->section_number, nit));
+									UnLock();
 									return TRUE;
 								}
+								UnLock();
 								return FALSE;
 							}
 						}
@@ -386,8 +437,10 @@ BOOL CDecodeUtil::CheckNIT(WORD PID, CNITTable* nit)
 						itr = this->nitActualInfo->nitSection.find(nit->section_number);
 						if( itr == this->nitActualInfo->nitSection.end() ){
 							this->nitActualInfo->nitSection.insert(pair<BYTE, CNITTable*>(nit->section_number, nit));
+							UnLock();
 							return TRUE;
 						}
+						UnLock();
 						return FALSE;
 					}
 				}else{
@@ -396,8 +449,10 @@ BOOL CDecodeUtil::CheckNIT(WORD PID, CNITTable* nit)
 					itr = this->nitActualInfo->nitSection.find(nit->section_number);
 					if( itr == this->nitActualInfo->nitSection.end() ){
 						this->nitActualInfo->nitSection.insert(pair<BYTE, CNITTable*>(nit->section_number, nit));
+						UnLock();
 						return TRUE;
 					}
+					UnLock();
 					return FALSE;
 				}
 			}
@@ -435,11 +490,14 @@ BOOL CDecodeUtil::CheckNIT(WORD PID, CNITTable* nit)
 	}else if( nit->table_id == 0x41 ){
 		//他ネットワーク
 		//特に扱う必要性なし
+		UnLock();
 		return FALSE;
 	}else{
+		UnLock();
 		return FALSE;
 	}
 
+	UnLock();
 	return TRUE;
 }
 
@@ -452,6 +510,8 @@ BOOL CDecodeUtil::CheckSDT(WORD PID, CSDTTable* sdt)
 	if( epgDBUtil != NULL ){
 		epgDBUtil->AddSDT(sdt);
 	}
+
+	if( Lock() == FALSE ) return FALSE;
 
 	if( sdt->table_id == 0x42 ){
 		//自ストリーム
@@ -499,8 +559,10 @@ BOOL CDecodeUtil::CheckSDT(WORD PID, CSDTTable* sdt)
 				itr = this->sdtActualInfo->sdtSection.find(sdt->section_number);
 				if( itr == this->sdtActualInfo->sdtSection.end() ){
 					this->sdtActualInfo->sdtSection.insert(pair<BYTE, CSDTTable*>(sdt->section_number, sdt));
+					UnLock();
 					return TRUE;
 				}
+				UnLock();
 				return FALSE;
 			}
 		}
@@ -587,15 +649,19 @@ BOOL CDecodeUtil::CheckSDT(WORD PID, CSDTTable* sdt)
 				itrTable = itr->second->sdtSection.find(sdt->section_number);
 				if( itrTable == itr->second->sdtSection.end() ){
 					itr->second->sdtSection.insert(pair<BYTE, CSDTTable*>(sdt->section_number, sdt));
+					UnLock();
 					return TRUE;
 				}
+				UnLock();
 				return FALSE;
 			}
 		}
 	}else{
+		UnLock();
 		return FALSE;
 	}
 
+	UnLock();
 	return TRUE;
 }
 
@@ -604,6 +670,8 @@ BOOL CDecodeUtil::CheckTOT(WORD PID, CTOTTable* tot)
 	if( tot == NULL ){
 		return FALSE;
 	}
+
+	if( Lock() == FALSE ) return FALSE;
 
 	SAFE_DELETE(this->totInfo);
 	this->totInfo = tot;
@@ -623,6 +691,11 @@ BOOL CDecodeUtil::CheckTOT(WORD PID, CTOTTable* tot)
 		);
 		*/
 
+	UnLock();
+
+	if( epgDBUtil != NULL ){
+		epgDBUtil->SetTDTTime(&tot->jst_time);
+	}
 	return TRUE;
 }
 
@@ -631,6 +704,8 @@ BOOL CDecodeUtil::CheckTDT(WORD PID, CTDTTable* tdt)
 	if( tdt == NULL ){
 		return FALSE;
 	}
+
+	if( Lock() == FALSE ) return FALSE;
 
 	SAFE_DELETE(this->tdtInfo);
 	this->tdtInfo = tdt;
@@ -649,6 +724,12 @@ BOOL CDecodeUtil::CheckTDT(WORD PID, CTDTTable* tdt)
 		tdt->jst_time.wSecond 
 		);*/
 		
+	UnLock();
+
+	if( epgDBUtil != NULL ){
+		epgDBUtil->SetTDTTime(&tdt->jst_time);
+	}
+
 	return TRUE;
 }
 
@@ -726,6 +807,8 @@ BOOL CDecodeUtil::CheckBIT(WORD PID, CBITTable* bit)
 		return FALSE;
 	}
 
+	if( Lock() == FALSE ) return FALSE;
+
 	if( this->bitInfo == NULL ){
 		//初回
 		this->bitInfo = bit;
@@ -740,10 +823,12 @@ BOOL CDecodeUtil::CheckBIT(WORD PID, CBITTable* bit)
 			this->bitInfo = bit;
 		}else{
 			//変化なし
+			UnLock();
 			return FALSE;
 		}
 	}
 
+	UnLock();
 	return TRUE;
 }
 
@@ -752,6 +837,8 @@ BOOL CDecodeUtil::CheckSIT(WORD PID, CSITTable* sit)
 	if( sit == NULL ){
 		return FALSE;
 	}
+
+	if( Lock() == FALSE ) return FALSE;
 
 	//時間計算
 	if( this->totInfo == NULL && this->tdtInfo == NULL ){
@@ -783,10 +870,12 @@ BOOL CDecodeUtil::CheckSIT(WORD PID, CSITTable* sit)
 			this->sitInfo = sit;
 		}else{
 			//変化なし
+			UnLock();
 			return FALSE;
 		}
 	}
 
+	UnLock();
 	return TRUE;
 }
 
@@ -800,9 +889,12 @@ DWORD CDecodeUtil::GetTSID(
 	WORD* transportStreamID
 	)
 {
+	if( Lock() == FALSE ) return ERR_FALSE;
+
 	if( sdtActualInfo != NULL ){
 		*originalNetworkID = sdtActualInfo->original_network_id;
 		*transportStreamID = sdtActualInfo->transport_stream_id;
+		UnLock();
 		return NO_ERR;
 	}else if( this->sitInfo != NULL && this->patInfo != NULL ){
 		//TSID
@@ -812,10 +904,12 @@ DWORD CDecodeUtil::GetTSID(
 		for( size_t i=0; i<this->sitInfo->descriptorList.size(); i++ ){
 			if( this->sitInfo->descriptorList[i]->networkIdentification != NULL ){
 				*originalNetworkID = this->sitInfo->descriptorList[i]->networkIdentification->network_id;
+				UnLock();
 				return NO_ERR;
 			}
 		}
 	}
+	UnLock();
 	return ERR_FALSE;
 }
 
@@ -830,32 +924,45 @@ DWORD CDecodeUtil::GetServiceListActual(
 	SERVICE_INFO** serviceList
 	)
 {
+	if( Lock() == FALSE ) return ERR_FALSE;
+
 	SAFE_DELETE_ARRAY(this->serviceList);
 	this->serviceListSize = 0;
 
 	if( serviceListSize == NULL || serviceList == NULL ){
+		UnLock();
 		return ERR_INVALID_ARG;
 	}
 
 	if( this->nitActualInfo == NULL || this->sdtActualInfo == NULL ){
 		if( GetServiceListSIT(serviceListSize, serviceList) != NO_ERR){
+			UnLock();
 			return ERR_FALSE;
 		}else{
+			UnLock();
 			return NO_ERR;
 		}
 	}else{
 		if( this->nitActualInfo->last_section_number+1 != this->nitActualInfo->nitSection.size() ||
 			this->sdtActualInfo->last_section_number+1 != this->sdtActualInfo->sdtSection.size() ){
+			UnLock();
 			return ERR_FALSE;
 		}
 	}
 
+	BOOL firstFlag = TRUE;
+	WORD sidNow = 0;
 	map<BYTE, CSDTTable*>::iterator itrSdt;
 	for(itrSdt = this->sdtActualInfo->sdtSection.begin(); itrSdt != this->sdtActualInfo->sdtSection.end(); itrSdt++){
-		this->serviceListSize += (DWORD)itrSdt->second->serviceInfoList.size();
+		for( size_t i=0; i<itrSdt->second->serviceInfoList.size(); i++ ){
+			if( firstFlag == TRUE || itrSdt->second->serviceInfoList[i]->service_id != sidNow ){
+				this->serviceListSize++;
+				sidNow = itrSdt->second->serviceInfoList[i]->service_id;
+				firstFlag = FALSE;
+			}
+		}
 	}
 	this->serviceList = new SERVICE_INFO[this->serviceListSize];
-
 
 	wstring network_nameW = L"";
 	wstring ts_nameW = L"";
@@ -894,13 +1001,40 @@ DWORD CDecodeUtil::GetServiceListActual(
 		}
 	}
 
+	firstFlag = TRUE;
+	sidNow = 0;
 	DWORD count = 0;
 	for(itrSdt = this->sdtActualInfo->sdtSection.begin(); itrSdt != this->sdtActualInfo->sdtSection.end(); itrSdt++){
 		for( size_t i=0; i<itrSdt->second->serviceInfoList.size(); i++ ){
-			this->serviceList[count].original_network_id = itrSdt->second->original_network_id;
-			this->serviceList[count].transport_stream_id = itrSdt->second->transport_stream_id;
-			this->serviceList[count].service_id = itrSdt->second->serviceInfoList[i]->service_id;
-			this->serviceList[count].extInfo = new SERVICE_EXT_INFO;
+			if( firstFlag == TRUE || itrSdt->second->serviceInfoList[i]->service_id != sidNow ){
+				if( firstFlag == FALSE ){
+					count++;
+				}
+				this->serviceList[count].original_network_id = itrSdt->second->original_network_id;
+				this->serviceList[count].transport_stream_id = itrSdt->second->transport_stream_id;
+				this->serviceList[count].service_id = itrSdt->second->serviceInfoList[i]->service_id;
+				this->serviceList[count].extInfo = new SERVICE_EXT_INFO;
+
+				if( network_nameW.size() > 0 ){
+					this->serviceList[count].extInfo->network_name = new WCHAR[network_nameW.size()+1];
+					wcscpy_s(this->serviceList[count].extInfo->network_name, network_nameW.size()+1, network_nameW.c_str());
+				}
+				if( ts_nameW.size() > 0 ){
+					this->serviceList[count].extInfo->ts_name = new WCHAR[ts_nameW.size()+1];
+					wcscpy_s(this->serviceList[count].extInfo->ts_name, ts_nameW.size()+1, ts_nameW.c_str());
+				}
+				if( firstFlag == TRUE ){
+					this->serviceList[count].extInfo->remote_control_key_id = remote_control_key_id;
+				}
+				this->serviceList[count].extInfo->partialReceptionFlag = FALSE;
+				for( size_t j=0; j<partialServiceList.size(); j++ ){
+					if( partialServiceList[j] == this->serviceList[count].service_id ){
+						this->serviceList[count].extInfo->partialReceptionFlag = TRUE;
+					}
+				}
+				sidNow = itrSdt->second->serviceInfoList[i]->service_id;
+				firstFlag = FALSE;
+			}
 
 			for( size_t j=0; j<itrSdt->second->serviceInfoList[i]->descriptorList.size(); j++ ){
 				if( itrSdt->second->serviceInfoList[i]->descriptorList[j]->service != NULL ){
@@ -920,42 +1054,23 @@ DWORD CDecodeUtil::GetServiceListActual(
 					AtoW(service_name, service_nameW);
 
 					this->serviceList[count].extInfo->service_type = service->service_type;
-					if( service_provider_nameW.size() > 0 ){
+					if( service_provider_nameW.size() > 0 && this->serviceList[count].extInfo->service_provider_name == NULL ){
 						this->serviceList[count].extInfo->service_provider_name = new WCHAR[service_provider_nameW.size()+1];
 						wcscpy_s(this->serviceList[count].extInfo->service_provider_name, service_provider_nameW.size()+1, service_provider_nameW.c_str());
 					}
-					if( service_nameW.size() > 0 ){
+					if( service_nameW.size() > 0 && this->serviceList[count].extInfo->service_name == NULL ){
 						this->serviceList[count].extInfo->service_name = new WCHAR[service_nameW.size()+1];
 						wcscpy_s(this->serviceList[count].extInfo->service_name, service_nameW.size()+1, service_nameW.c_str());
 					}
 				}
 			}
-
-			if( network_nameW.size() > 0 ){
-				this->serviceList[count].extInfo->network_name = new WCHAR[network_nameW.size()+1];
-				wcscpy_s(this->serviceList[count].extInfo->network_name, network_nameW.size()+1, network_nameW.c_str());
-			}
-			if( ts_nameW.size() > 0 ){
-				this->serviceList[count].extInfo->ts_name = new WCHAR[ts_nameW.size()+1];
-				wcscpy_s(this->serviceList[count].extInfo->ts_name, ts_nameW.size()+1, ts_nameW.c_str());
-			}
-			this->serviceList[count].extInfo->remote_control_key_id = remote_control_key_id;
-
-			this->serviceList[count].extInfo->partialReceptionFlag = FALSE;
-			for( size_t j=0; j<partialServiceList.size(); j++ ){
-				if( partialServiceList[j] == this->serviceList[count].service_id ){
-					this->serviceList[count].extInfo->partialReceptionFlag = TRUE;
-				}
-			}
-
-			count++;
 		}
 	}
 
 	*serviceListSize = this->serviceListSize;
 	*serviceList = this->serviceList;
 
-
+	UnLock();
 	return NO_ERR;
 }
 
@@ -1061,11 +1176,15 @@ DWORD CDecodeUtil::GetNowTime(
 	SYSTEMTIME* time
 	)
 {
+	if( Lock() == FALSE ) return ERR_FALSE;
+
 	if( this->totInfo != NULL ){
 		*time = this->totInfo->jst_time;
+		UnLock();
 		return NO_ERR;
 	}else if( this->tdtInfo != NULL ){
 		*time = this->tdtInfo->jst_time;
+		UnLock();
 		return NO_ERR;
 	}else{
 		if( this->sitInfo != NULL ){
@@ -1073,11 +1192,13 @@ DWORD CDecodeUtil::GetNowTime(
 				if( this->sitInfo->descriptorList[i]->partialTSTime != NULL ){
 					if( this->sitInfo->descriptorList[i]->partialTSTime->jst_time_flag == 1 ){
 						*time = this->sitInfo->descriptorList[i]->partialTSTime->jst_time;
+						UnLock();
 						return NO_ERR;
 					}
 				}
 			}
 		}
+		UnLock();
 		return ERR_FALSE;
 	}
 }
@@ -1089,4 +1210,15 @@ int CDecodeUtil::GetTimeDelay(
 	)
 {
 	return this->delaySec;
+}
+
+//ストリームの変更を通知する
+void CDecodeUtil::SetStreamChangeEvent(
+	)
+{
+	if( Lock() == FALSE ) return;
+
+	this->ChangeTSIDClear(0xFFFF);
+	UnLock();
+	return;
 }

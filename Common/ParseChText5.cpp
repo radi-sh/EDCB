@@ -171,21 +171,32 @@ BOOL CParseChText5::SaveChText(LPCWSTR filePath)
 	map<LONGLONG, CH_DATA5>::iterator itrCh;
 	for( itrCh = this->chList.begin(); itrCh != this->chList.end(); itrCh++ ){
 		int network;
+		int order;
 		if( 0x7880 <= itrCh->second.originalNetworkID && itrCh->second.originalNetworkID <= 0x7FE8 ){
 			if( itrCh->second.partialFlag == 0 ){
 				network = 0; //地デジ
 			}else{
 				network = 1; //ワンセグ
 			}
+			order = ((itrCh->second.serviceID & 0x0180) << 7) | ((itrCh->second.serviceID & 0x0078) << 7) | ((itrCh->second.serviceID & 0xFE00) >> 6) | (itrCh->second.serviceID & 0x0007);
 		}else if( itrCh->second.originalNetworkID == 0x04 ){
 			network = 2; //BS
+			order = itrCh->second.serviceID & 0x3FF;
 		}else if( itrCh->second.originalNetworkID == 0x06 || itrCh->second.originalNetworkID == 0x07 ){
 			network = 3; //CS
+			order = itrCh->second.serviceID & 0x3FF;
+		}else if( itrCh->second.originalNetworkID == 0x0A ){
+			network = 4; //SPHD
+			order = itrCh->second.serviceID & 0x3FF;
+		}else if( itrCh->second.originalNetworkID == 0x01 || itrCh->second.originalNetworkID == 0x03 ){
+			network = 5; //SPSD
+			order = itrCh->second.serviceID & 0x3FF;
 		}else{
-			network = 4; //その他
+			network = 99; //その他
+			order = itrCh->second.serviceID;
 		}
 
-		LONGLONG Key = ((LONGLONG)network)<<16 | (LONGLONG)itrCh->second.serviceID;
+		LONGLONG Key = ((LONGLONG)network)<<16 | (LONGLONG)order;
 		sortList.insert(pair<LONGLONG, CH_DATA5>(Key, itrCh->second));
 	}
 

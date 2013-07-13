@@ -44,17 +44,62 @@ BOOL CChSetUtil::SaveChSet(
 		return FALSE;
 	}
 
+	//ChSet4の処理
+	//useViewFlagの状態を保持する
+	//保存時にソートされるから意味ないけどリスト順も変えないようにしておく
+	//既存のデータを読み込み
+	CParseChText4 chText4Org;
+	chText4Org.ParseText(chSet4FilePath.c_str());
+	//今回見つからなかった情報を削除
+	multimap<LONGLONG, CH_DATA4>::iterator itrOrg;
+	while( 1 ){
+		BOOL retry = FALSE;
+		for( itrOrg = chText4Org.chList.begin(); itrOrg != chText4Org.chList.end(); itrOrg++ ){
+			if( chText4.FindChService(itrOrg->second, NULL) == FALSE ){
+				chText4Org.DelChService(itrOrg->second.space, itrOrg->second.ch, itrOrg->second.serviceID);
+				retry = TRUE;
+				break;
+			}
+		}
+		if( retry == FALSE ){
+			break;
+		}
+	}
+	//情報追加
+	multimap<LONGLONG, CH_DATA4>::iterator itrNew;
+	for ( itrNew = this->chText4.chList.begin(); itrNew != this->chText4.chList.end(); itrNew++ ){
+		CH_DATA4 chInfo;
+		//新規なら追加
+		if( chText4Org.FindChService(itrNew->second, &chInfo) == FALSE ){
+			chText4Org.AddCh(itrNew->second);
+		//すでに存在していればuseViewFlagを反映して上書き
+		}else{
+			CH_DATA4 chInfoNew = itrNew->second;
+			chInfoNew.useViewFlag = chInfo.useViewFlag;
+			chText4Org.ChangeCh(chInfoNew);
+		}
+	}
+	//保存
 	BOOL ret = TRUE;
-	if( this->chText4.SaveChText(chSet4FilePath.c_str()) == FALSE ){
+	if( chText4Org.SaveChText(chSet4FilePath.c_str()) == FALSE ){
 		ret = FALSE;
 	}
+	//最新版を再読み込み
+	this->chText4.ParseText(chSet4FilePath.c_str());
 
+	//ChSet5の処理
+	//epgCapFlagとsearchFlagの状態を保持する
 	//他で更新されてる可能性あるので再読み込み
 	CParseChText5 chText5;
 	chText5.ParseText(chSet5FilePath.c_str());
 	//現在保持している情報を追加
 	map<LONGLONG, CH_DATA5>::iterator itr;
 	for( itr = this->chText5.chList.begin(); itr != this->chText5.chList.end(); itr++ ){
+		map<LONGLONG, CH_DATA5>::iterator itrOrg = chText5.chList.find(itr->first);
+		if( itrOrg != chText5.chList.end() ){
+			itr->second.epgCapFlag = itrOrg->second.epgCapFlag;
+			itr->second.searchFlag = itrOrg->second.searchFlag;
+		}
 		chText5.AddCh(itr->second);
 	}
 	//保存
@@ -96,7 +141,7 @@ BOOL CChSetUtil::AddServiceInfo(
 	if( serviceInfo->extInfo != NULL ){
 		item4.serviceType = serviceInfo->extInfo->service_type;
 		item4.partialFlag = serviceInfo->extInfo->partialReceptionFlag;
-		if( item4.serviceType == 0x01 || item4.serviceType == 0xA5 ){
+		if( item4.serviceType == 0x01 || item4.serviceType == 0xA5 || item4.serviceType == 0x81 ){
 			item4.useViewFlag = TRUE;
 		}else{
 			item4.useViewFlag = FALSE;
@@ -127,7 +172,7 @@ BOOL CChSetUtil::AddServiceInfo(
 		}else if( serviceInfo->extInfo->network_name != NULL){
 			item5.networkName = serviceInfo->extInfo->network_name;
 		}
-		if( item5.serviceType == 0x01 || item4.serviceType == 0xA5 ){
+		if( item5.serviceType == 0x01 || item5.serviceType == 0xA5 || item5.serviceType == 0x81 ){
 			item5.epgCapFlag = TRUE;
 			item5.searchFlag = TRUE;
 		}else{

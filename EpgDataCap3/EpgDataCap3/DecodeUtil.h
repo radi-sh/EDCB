@@ -55,7 +55,13 @@ public:
 	int GetTimeDelay(
 		);
 
+	//ストリームの変更を通知する
+	void SetStreamChangeEvent(
+		);
+
 protected:
+	HANDLE lockEvent;
+
 	typedef struct _NIT_SECTION_INFO{
 		WORD network_id;
 		BYTE version_number;
@@ -108,6 +114,9 @@ protected:
 	int delaySec;
 
 protected:
+	BOOL Lock(LPCWSTR log = NULL, DWORD timeOut = 60*1000);
+	void UnLock(LPCWSTR log = NULL);
+
 	void Clear();
 	void ClearBuff(WORD noClearPid);
 	void ChangeTSIDClear(WORD noClearPid);
