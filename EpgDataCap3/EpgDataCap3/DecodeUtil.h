@@ -67,6 +67,14 @@ protected:
 		BYTE version_number;
 		BYTE last_section_number;
 		map<BYTE, CNITTable*> nitSection;
+		_NIT_SECTION_INFO(WORD networkId, BYTE versionNumber, BYTE lastSectionNumber){
+			network_id = networkId;
+			version_number = versionNumber;
+			last_section_number = lastSectionNumber;
+		}
+		_NIT_SECTION_INFO(void){
+			_NIT_SECTION_INFO(0, 0xFF, 0xFF);
+		}
 		~_NIT_SECTION_INFO(void){
 			map<BYTE, CNITTable*>::iterator itr;
 			for( itr=nitSection.begin(); itr != nitSection.end(); itr++ ){
@@ -81,6 +89,15 @@ protected:
 		BYTE version_number;
 		BYTE last_section_number;
 		map<BYTE, CSDTTable*> sdtSection;
+		_SDT_SECTION_INFO(WORD originalNetworkId, WORD transportStreamId, BYTE versionNumber, BYTE lastSectionNumber){
+			original_network_id = originalNetworkId;
+			transport_stream_id = transportStreamId;
+			version_number = versionNumber;
+			last_section_number = lastSectionNumber;
+		}
+		_SDT_SECTION_INFO(void){
+			_SDT_SECTION_INFO(0, 0,0xFF, 0xFF);
+		}
 		~_SDT_SECTION_INFO(void){
 			map<BYTE, CSDTTable*>::iterator itr;
 			for( itr=sdtSection.begin(); itr != sdtSection.end(); itr++ ){

@@ -359,134 +359,37 @@ BOOL CDecodeUtil::CheckNIT(WORD PID, CNITTable* nit)
 		return FALSE;
 	}
 
-	if( epgDBUtil != NULL ){
-		epgDBUtil->AddServiceList(nit);
-	}
-
 	if( Lock() == FALSE ) return FALSE;
 
 	if( nit->table_id == 0x40 ){
 		//自ネットワーク
-		if( this->nitActualInfo == NULL ){
-			//初回
-			this->nitActualInfo = new NIT_SECTION_INFO;
-			this->nitActualInfo->network_id = nit->network_id;
-			this->nitActualInfo->version_number = nit->version_number;
-			this->nitActualInfo->last_section_number = nit->last_section_number;
-			this->nitActualInfo->nitSection.insert(pair<BYTE, CNITTable*>(nit->section_number, nit));
-		}else{
+		if( nit->current_next_indicator != 1 ){
+			//current以外は無視
+			UnLock();
+			return FALSE;
+		}
+		if( this->nitActualInfo != NULL ){
 			if( this->nitActualInfo->network_id != nit->network_id ){
 				//NID変わったのでネットワーク変わった
 				ChangeTSIDClear(PID);
 				SAFE_DELETE(this->nitActualInfo);
-				this->nitActualInfo = new NIT_SECTION_INFO;
-				this->nitActualInfo->network_id = nit->network_id;
-				this->nitActualInfo->version_number = nit->version_number;
-				this->nitActualInfo->last_section_number = nit->last_section_number;
-				this->nitActualInfo->nitSection.insert(pair<BYTE, CNITTable*>(nit->section_number, nit));
-			}else if(this->nitActualInfo->version_number != nit->version_number){
+			}else if( this->nitActualInfo->version_number != nit->version_number ){
 				//バージョン変わった
 				SAFE_DELETE(this->nitActualInfo);
-				this->nitActualInfo = new NIT_SECTION_INFO;
-				this->nitActualInfo->network_id = nit->network_id;
-				this->nitActualInfo->version_number = nit->version_number;
-				this->nitActualInfo->last_section_number = nit->last_section_number;
-				this->nitActualInfo->nitSection.insert(pair<BYTE, CNITTable*>(nit->section_number, nit));
-			}else{
-				map<BYTE, CNITTable*>::iterator itr;
-				itr = this->nitActualInfo->nitSection.find(0);
-				if( itr != this->nitActualInfo->nitSection.end() ){
-					if( (itr->second->TSInfoList.size() != 0 && nit->TSInfoList.size() != 0) &&
-						(itr->first == nit->section_number)
-						){
-						if( itr->second->TSInfoList[0]->original_network_id != nit->TSInfoList[0]->original_network_id ){
-							//ONID変わったのでネットワーク変わった
-							ChangeTSIDClear(PID);
-							SAFE_DELETE(this->nitActualInfo);
-							this->nitActualInfo = new NIT_SECTION_INFO;
-							this->nitActualInfo->network_id = nit->network_id;
-							this->nitActualInfo->version_number = nit->version_number;
-							this->nitActualInfo->last_section_number = nit->last_section_number;
-							this->nitActualInfo->nitSection.insert(pair<BYTE, CNITTable*>(nit->section_number, nit));
-						}else{
-							if( itr->second->TSInfoList[0]->transport_stream_id != nit->TSInfoList[0]->transport_stream_id ){
-								//TSID変わったのでネットワーク変わった
-								ChangeTSIDClear(PID);
-								SAFE_DELETE(this->nitActualInfo);
-								this->nitActualInfo = new NIT_SECTION_INFO;
-								this->nitActualInfo->network_id = nit->network_id;
-								this->nitActualInfo->version_number = nit->version_number;
-								this->nitActualInfo->last_section_number = nit->last_section_number;
-								this->nitActualInfo->nitSection.insert(pair<BYTE, CNITTable*>(nit->section_number, nit));
-							}else{
-								//変化なし
-								map<BYTE, CNITTable*>::iterator itr;
-								itr = this->nitActualInfo->nitSection.find(nit->section_number);
-								if( itr == this->nitActualInfo->nitSection.end() ){
-									this->nitActualInfo->nitSection.insert(pair<BYTE, CNITTable*>(nit->section_number, nit));
-									UnLock();
-									return TRUE;
-								}
-								UnLock();
-								return FALSE;
-							}
-						}
-					}else{
-						//変化なし
-						map<BYTE, CNITTable*>::iterator itr;
-						itr = this->nitActualInfo->nitSection.find(nit->section_number);
-						if( itr == this->nitActualInfo->nitSection.end() ){
-							this->nitActualInfo->nitSection.insert(pair<BYTE, CNITTable*>(nit->section_number, nit));
-							UnLock();
-							return TRUE;
-						}
-						UnLock();
-						return FALSE;
-					}
-				}else{
-					//変化なし
-					map<BYTE, CNITTable*>::iterator itr;
-					itr = this->nitActualInfo->nitSection.find(nit->section_number);
-					if( itr == this->nitActualInfo->nitSection.end() ){
-						this->nitActualInfo->nitSection.insert(pair<BYTE, CNITTable*>(nit->section_number, nit));
-						UnLock();
-						return TRUE;
-					}
-					UnLock();
-					return FALSE;
-				}
 			}
 		}
-		/*
-//		_OutputDebugString(L"find NIT\r\n");
-		for( size_t i=0; i<nit->descriptorList.size(); i++ ){
-			if( nit->descriptorList[i]->networkName != NULL ){
-				if( nit->descriptorList[i]->networkName->char_nameLength > 0 ){
-					CARIB8CharDecode arib;
-					string network_name = "";
-					arib.PSISI((const BYTE*)nit->descriptorList[i]->networkName->char_name, nit->descriptorList[i]->networkName->char_nameLength, &network_name);
-					wstring network_nameW = L"";
-					AtoW(network_name, network_nameW);
-//					_OutputDebugString(L"%s\r\n", network_nameW.c_str());
-				}
-			}
+		if( this->nitActualInfo == NULL ){
+			this->nitActualInfo = new NIT_SECTION_INFO(nit->network_id, nit->version_number, nit->last_section_number);
 		}
-		for( size_t i=0; i<nit->TSInfoList.size(); i++ ){
-			for( size_t j=0; j<nit->TSInfoList[i]->descriptorList.size(); j++ ){
-				if( nit->TSInfoList[i]->descriptorList[j]->TSInfo != NULL ){
-					CTSInfoDesc* TSInfo = nit->TSInfoList[i]->descriptorList[j]->TSInfo;
-					CARIB8CharDecode arib;
-					wstring ts_nameW = L"";
-					if( TSInfo->length_of_ts_name > 0 ){
-						string ts_name = "";
-						arib.PSISI((const BYTE*)TSInfo->ts_name_char, TSInfo->length_of_ts_name, &ts_name);
-						AtoW(ts_name, ts_nameW);
-					}
-//					_OutputDebugString(L"remote_control_key_id %d , %s\r\n", TSInfo->remote_control_key_id, ts_nameW.c_str());
-				}
-			}
+		if( this->nitActualInfo->nitSection.size() == (size_t)nit->last_section_number + 1 ){
+			UnLock();
+			return FALSE;
 		}
-		*/
+		if( this->nitActualInfo->nitSection[nit->section_number] != NULL ){
+			UnLock();
+			return FALSE;
+		}
+		this->nitActualInfo->nitSection[nit->section_number] = nit;
 	}else if( nit->table_id == 0x41 ){
 		//他ネットワーク
 		//特に扱う必要性なし
@@ -498,6 +401,11 @@ BOOL CDecodeUtil::CheckNIT(WORD PID, CNITTable* nit)
 	}
 
 	UnLock();
+
+	if( epgDBUtil != NULL ){
+		epgDBUtil->AddServiceList(nit);
+	}
+
 	return TRUE;
 }
 
@@ -507,161 +415,72 @@ BOOL CDecodeUtil::CheckSDT(WORD PID, CSDTTable* sdt)
 		return FALSE;
 	}
 
+	if( Lock() == FALSE ) return FALSE;
+
+	if( sdt->current_next_indicator != 1 ){
+		//current以外は無視
+		UnLock();
+		return FALSE;
+	}
+	if( sdt->table_id == 0x42 ){
+		//自ストリーム
+		if( this->sdtActualInfo != NULL ){
+			if( this->sdtActualInfo->original_network_id != sdt->original_network_id			//ONID変わったのでネットワーク変わった
+					|| this->sdtActualInfo->transport_stream_id != sdt->transport_stream_id ){	//TSID変わったのでチャンネル変わった
+				ChangeTSIDClear(PID);
+				SAFE_DELETE(this->sdtActualInfo);
+			}else if( this->sdtActualInfo->version_number != sdt->version_number ){
+				//バージョン変わった
+				SAFE_DELETE(this->sdtActualInfo);
+			}
+		}
+		if( this->sdtActualInfo == NULL ){
+			this->sdtActualInfo = new SDT_SECTION_INFO(sdt->original_network_id, sdt->transport_stream_id, sdt->version_number, sdt->last_section_number);
+		}
+		if( this->sdtActualInfo->sdtSection.size() == (size_t)sdt->last_section_number + 1 ){
+			UnLock();
+			return FALSE;
+		}
+		if( this->sdtActualInfo->sdtSection[sdt->section_number] != NULL ){
+			UnLock();
+			return FALSE;
+		}
+		this->sdtActualInfo->sdtSection[sdt->section_number] = sdt;
+	}else if( sdt->table_id == 0x46 ){
+		//他ストリーム
+		DWORD key = ((DWORD)sdt->original_network_id)<<16 | sdt->transport_stream_id;
+		map<DWORD, SDT_SECTION_INFO*>::iterator itr;
+		itr = this->sdtOtherMap.find(key);
+		if( itr != this->sdtOtherMap.end() && itr->second->version_number != sdt->version_number ){
+			//バージョン変わった
+			SAFE_DELETE(itr->second);
+			this->sdtOtherMap.erase(itr);
+			itr = this->sdtOtherMap.end();
+		}
+		SDT_SECTION_INFO* info;
+		if( itr == this->sdtOtherMap.end() ){
+			info = new SDT_SECTION_INFO(sdt->original_network_id, sdt->transport_stream_id, sdt->version_number, sdt->last_section_number);
+			sdtOtherMap.insert(pair<DWORD, SDT_SECTION_INFO*>(key, info));
+		}else{
+			info = itr->second;
+		}
+		if( info->sdtSection.size() == (size_t)sdt->last_section_number + 1 ){
+			UnLock();
+			return FALSE;
+		}
+		if( info->sdtSection[sdt->section_number] != NULL ){
+			UnLock();
+			return FALSE;
+		}
+		info->sdtSection[sdt->section_number] = sdt;
+	}
+
+	UnLock();
+
 	if( epgDBUtil != NULL ){
 		epgDBUtil->AddSDT(sdt);
 	}
 
-	if( Lock() == FALSE ) return FALSE;
-
-	if( sdt->table_id == 0x42 ){
-		//自ストリーム
-		if( this->sdtActualInfo == NULL ){
-			//初回
-			this->sdtActualInfo = new SDT_SECTION_INFO;
-			this->sdtActualInfo->original_network_id = sdt->original_network_id;
-			this->sdtActualInfo->transport_stream_id = sdt->transport_stream_id;
-			this->sdtActualInfo->version_number = sdt->version_number;
-			this->sdtActualInfo->last_section_number = sdt->last_section_number;
-			this->sdtActualInfo->sdtSection.insert(pair<BYTE, CSDTTable*>(sdt->section_number, sdt));
-		}else{
-			if( this->sdtActualInfo->original_network_id != sdt->original_network_id ){
-				//ONID変わったのでネットワーク変わった
-				ChangeTSIDClear(PID);
-				SAFE_DELETE(this->sdtActualInfo);
-				this->sdtActualInfo = new SDT_SECTION_INFO;
-				this->sdtActualInfo->original_network_id = sdt->original_network_id;
-				this->sdtActualInfo->transport_stream_id = sdt->transport_stream_id;
-				this->sdtActualInfo->version_number = sdt->version_number;
-				this->sdtActualInfo->last_section_number = sdt->last_section_number;
-				this->sdtActualInfo->sdtSection.insert(pair<BYTE, CSDTTable*>(sdt->section_number, sdt));
-			}else if( this->sdtActualInfo->transport_stream_id != sdt->transport_stream_id ){
-				//TSID変わったのでチャンネル変わった
-				ChangeTSIDClear(PID);
-				SAFE_DELETE(this->sdtActualInfo);
-				this->sdtActualInfo = new SDT_SECTION_INFO;
-				this->sdtActualInfo->original_network_id = sdt->original_network_id;
-				this->sdtActualInfo->transport_stream_id = sdt->transport_stream_id;
-				this->sdtActualInfo->version_number = sdt->version_number;
-				this->sdtActualInfo->last_section_number = sdt->last_section_number;
-				this->sdtActualInfo->sdtSection.insert(pair<BYTE, CSDTTable*>(sdt->section_number, sdt));
-			}else if( this->sdtActualInfo->version_number != sdt->version_number ){
-				//バージョン変わった
-				SAFE_DELETE(this->sdtActualInfo);
-				this->sdtActualInfo = new SDT_SECTION_INFO;
-				this->sdtActualInfo->original_network_id = sdt->original_network_id;
-				this->sdtActualInfo->transport_stream_id = sdt->transport_stream_id;
-				this->sdtActualInfo->version_number = sdt->version_number;
-				this->sdtActualInfo->last_section_number = sdt->last_section_number;
-				this->sdtActualInfo->sdtSection.insert(pair<BYTE, CSDTTable*>(sdt->section_number, sdt));
-			}else{
-				//変化なし
-				map<BYTE, CSDTTable*>::iterator itr;
-				itr = this->sdtActualInfo->sdtSection.find(sdt->section_number);
-				if( itr == this->sdtActualInfo->sdtSection.end() ){
-					this->sdtActualInfo->sdtSection.insert(pair<BYTE, CSDTTable*>(sdt->section_number, sdt));
-					UnLock();
-					return TRUE;
-				}
-				UnLock();
-				return FALSE;
-			}
-		}
-////		_OutputDebugString(L"find SDT\r\n");
-////		_OutputDebugString(L"ONID 0x%04X, TSID 0x%04X\r\n", sdt->original_network_id, sdt->transport_stream_id);
-//		for(size_t i=0; i<sdt->serviceInfoList.size(); i++ ){
-////			_OutputDebugString(L"SID 0x%04X\r\n", sdt->serviceInfoList[i]->service_id);
-//			for( size_t j=0; j<sdt->serviceInfoList[i]->descriptorList.size(); j++ ){
-//				if( sdt->serviceInfoList[i]->descriptorList[j]->service != NULL ){
-//					CServiceDesc* service = sdt->serviceInfoList[i]->descriptorList[j]->service;
-//					CARIB8CharDecode arib;
-//					string service_provider_name = "";
-//					string service_name = "";
-//					if( service->service_provider_name_length > 0 ){
-//						arib.PSISI((const BYTE*)service->char_service_provider_name, service->service_provider_name_length, &service_provider_name);
-//					}
-//					if( service->service_name_length > 0 ){
-//						arib.PSISI((const BYTE*)service->char_service_name, service->service_name_length, &service_name);
-//					}
-///*					wstring service_provider_nameW = L"";
-//					wstring service_nameW = L"";
-//					AtoW(service_provider_name, service_provider_nameW);
-//					AtoW(service_name, service_nameW);
-//					_OutputDebugString(L"type 0x%04X %s %s\r\n", service->service_type, service_provider_nameW.c_str(), service_nameW.c_str());
-//*/				}
-//				//logo_transmission
-//			}
-//		}
-
-	}else if( sdt->table_id == 0x46 ){
-		//他ストリーム
-/*		_OutputDebugString(L"find SDT OTHER\r\n");
-		_OutputDebugString(L"ONID 0x%04X, TSID 0x%04X\r\n", sdt->original_network_id, sdt->transport_stream_id);
-		for(size_t i=0; i<sdt->serviceInfoList.size(); i++ ){
-			_OutputDebugString(L"SID 0x%04X\r\n", sdt->serviceInfoList[i]->service_id);
-			for( size_t j=0; j<sdt->serviceInfoList[i]->descriptorList.size(); j++ ){
-				if( sdt->serviceInfoList[i]->descriptorList[j]->service != NULL ){
-					CServiceDesc* service = sdt->serviceInfoList[i]->descriptorList[j]->service;
-					CARIB8CharDecode arib;
-					string service_provider_name = "";
-					string service_name = "";
-					if( service->service_provider_name_length > 0 ){
-						arib.PSISI((const BYTE*)service->char_service_provider_name, service->service_provider_name_length, &service_provider_name);
-					}
-					if( service->service_name_length > 0 ){
-						arib.PSISI((const BYTE*)service->char_service_name, service->service_name_length, &service_name);
-					}
-					wstring service_provider_nameW = L"";
-					wstring service_nameW = L"";
-					AtoW(service_provider_name, service_provider_nameW);
-					AtoW(service_name, service_nameW);
-					_OutputDebugString(L"type 0x%04X %s %s\r\n", service->service_type, service_provider_nameW.c_str(), service_nameW.c_str());
-				}
-				//logo_transmission
-			}
-		}
-*/
-		DWORD key = ((DWORD)sdt->original_network_id)<<16 | sdt->transport_stream_id;
-		map<DWORD, SDT_SECTION_INFO*>::iterator itr;
-		itr = sdtOtherMap.find(key);
-		if( itr == sdtOtherMap.end() ){
-			SDT_SECTION_INFO* info = new SDT_SECTION_INFO;
-			info->original_network_id = sdt->original_network_id;
-			info->transport_stream_id = sdt->transport_stream_id;
-			info->version_number = sdt->version_number;
-			info->last_section_number = sdt->last_section_number;
-			info->sdtSection.insert(pair<BYTE, CSDTTable*>(sdt->section_number, sdt));
-			sdtOtherMap.insert(pair<DWORD, SDT_SECTION_INFO*>(key, info));
-		}else{
-			if( itr->second->version_number != sdt->version_number ){
-				SAFE_DELETE(itr->second);
-				sdtOtherMap.erase(itr);
-
-				SDT_SECTION_INFO* info = new SDT_SECTION_INFO;
-				info->original_network_id = sdt->original_network_id;
-				info->transport_stream_id = sdt->transport_stream_id;
-				info->version_number = sdt->version_number;
-				info->last_section_number = sdt->last_section_number;
-				info->sdtSection.insert(pair<BYTE, CSDTTable*>(sdt->section_number, sdt));
-				sdtOtherMap.insert(pair<DWORD, SDT_SECTION_INFO*>(key, info));
-			}else{
-				//変化なし
-				map<BYTE, CSDTTable*>::iterator itrTable;
-				itrTable = itr->second->sdtSection.find(sdt->section_number);
-				if( itrTable == itr->second->sdtSection.end() ){
-					itr->second->sdtSection.insert(pair<BYTE, CSDTTable*>(sdt->section_number, sdt));
-					UnLock();
-					return TRUE;
-				}
-				UnLock();
-				return FALSE;
-			}
-		}
-	}else{
-		UnLock();
-		return FALSE;
-	}
-
-	UnLock();
 	return TRUE;
 }
 
