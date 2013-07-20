@@ -15,9 +15,9 @@ CDecodeUtil::CDecodeUtil(void)
 	this->catInfo = NULL;
 	this->nitActualInfo = NULL;
 	this->sdtActualInfo = NULL;
+	this->bitActualInfo = NULL;
 	this->totInfo = NULL;
 	this->tdtInfo = NULL;
-	this->bitInfo = NULL;
 	this->sitInfo = NULL;
 
 	this->serviceListSize = 0;
@@ -89,6 +89,7 @@ void CDecodeUtil::Clear()
 
 	SAFE_DELETE(this->nitActualInfo);
 	SAFE_DELETE(this->sdtActualInfo);
+	SAFE_DELETE(this->bitActualInfo);
 	map<DWORD, SDT_SECTION_INFO*>::iterator itrSdt;
 	for( itrSdt = this->sdtOtherMap.begin(); itrSdt != this->sdtOtherMap.end(); itrSdt++ ){
 		SAFE_DELETE(itrSdt->second);
@@ -97,7 +98,6 @@ void CDecodeUtil::Clear()
 
 	SAFE_DELETE(this->totInfo);
 	SAFE_DELETE(this->tdtInfo);
-	SAFE_DELETE(this->bitInfo);
 	SAFE_DELETE(this->sitInfo);
 
 	if( this->epgDBUtil != NULL ){
@@ -138,6 +138,7 @@ void CDecodeUtil::ChangeTSIDClear(WORD noClearPid)
 
 	SAFE_DELETE(this->nitActualInfo);
 	SAFE_DELETE(this->sdtActualInfo);
+	SAFE_DELETE(this->bitActualInfo);
 	map<DWORD, SDT_SECTION_INFO*>::iterator itrSdt;
 	for( itrSdt = this->sdtOtherMap.begin(); itrSdt != this->sdtOtherMap.end(); itrSdt++ ){
 		SAFE_DELETE(itrSdt->second);
@@ -146,7 +147,6 @@ void CDecodeUtil::ChangeTSIDClear(WORD noClearPid)
 
 	SAFE_DELETE(this->totInfo);
 	SAFE_DELETE(this->tdtInfo);
-	SAFE_DELETE(this->bitInfo);
 	SAFE_DELETE(this->sitInfo);
 
 	if( this->epgDBUtil != NULL ){
@@ -628,24 +628,28 @@ BOOL CDecodeUtil::CheckBIT(WORD PID, CBITTable* bit)
 
 	if( Lock() == FALSE ) return FALSE;
 
-	if( this->bitInfo == NULL ){
-		//初回
-		this->bitInfo = bit;
-	}else{
-		if( this->bitInfo->original_network_id != bit->original_network_id ){
+	if( this->bitActualInfo != NULL ){
+		if( this->bitActualInfo->original_network_id != bit->original_network_id ){
 			//ONID変わったのでネットワーク変わった
 			ChangeTSIDClear(PID);
-			this->bitInfo = bit;
-		}else if( this->bitInfo->version_number != bit->version_number ){
+			SAFE_DELETE(this->bitActualInfo);
+		}else if( this->bitActualInfo->version_number != bit->version_number ){
 			//バージョン変わった
-			SAFE_DELETE(this->bitInfo);
-			this->bitInfo = bit;
-		}else{
-			//変化なし
-			UnLock();
-			return FALSE;
+			SAFE_DELETE(this->bitActualInfo);
 		}
 	}
+	if( this->bitActualInfo == NULL ){
+		this->bitActualInfo = new BIT_SECTION_INFO(bit->original_network_id, bit->version_number, bit->last_section_number);
+	}
+	if( this->bitActualInfo->bitSection.size() == (size_t)bit->last_section_number + 1 ){
+		UnLock();
+		return FALSE;
+	}
+	if( this->bitActualInfo->bitSection[bit->section_number] != NULL ){
+		UnLock();
+		return FALSE;
+	}
+	this->bitActualInfo->bitSection[bit->section_number] = bit;
 
 	UnLock();
 	return TRUE;

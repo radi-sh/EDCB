@@ -106,6 +106,27 @@ protected:
 			sdtSection.clear();
 		};
 	}SDT_SECTION_INFO;
+	typedef struct _BIT_SECTION_INFO{
+		WORD original_network_id;
+		BYTE version_number;
+		BYTE last_section_number;
+		map<BYTE, CBITTable*> bitSection;
+		_BIT_SECTION_INFO(WORD originalNetworkId, BYTE versionNumber, BYTE lastSectionNumber){
+			original_network_id = originalNetworkId;
+			version_number = versionNumber;
+			last_section_number = lastSectionNumber;
+		}
+		_BIT_SECTION_INFO(void){
+			_BIT_SECTION_INFO(0, 0xFF, 0xFF);
+		}
+		~_BIT_SECTION_INFO(void){
+			map<BYTE, CBITTable*>::iterator itr;
+			for( itr=bitSection.begin(); itr != bitSection.end(); itr++ ){
+				SAFE_DELETE(itr->second);
+			}
+			bitSection.clear();
+		};
+	}BIT_SECTION_INFO;
 
 	CEpgDBUtil* epgDBUtil;
 
@@ -118,12 +139,11 @@ protected:
 	map<WORD, CPMTTable*> pmtMap;
 	NIT_SECTION_INFO* nitActualInfo;
 	SDT_SECTION_INFO* sdtActualInfo;
+	BIT_SECTION_INFO* bitActualInfo;
 	map<DWORD, SDT_SECTION_INFO*> sdtOtherMap;
 	CTOTTable* totInfo;
 	CTDTTable* tdtInfo;
-	CBITTable* bitInfo;
 	CSITTable* sitInfo;
-
 
 	DWORD serviceListSize;
 	SERVICE_INFO* serviceList;
