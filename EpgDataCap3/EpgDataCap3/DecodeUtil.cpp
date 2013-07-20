@@ -668,6 +668,10 @@ BOOL CDecodeUtil::CheckSIT(WORD PID, CSITTable* sit)
 					__int64 streamTime = ConvertI64Time( sit->descriptorList[i]->partialTSTime->jst_time );
 
 					this->delaySec = (int)((streamTime - nowTime)/I64_1SEC);
+
+					if( epgDBUtil != NULL ){
+						epgDBUtil->SetTDTTime(&sit->descriptorList[i]->partialTSTime->jst_time);
+					}
 				}
 			}
 		}
