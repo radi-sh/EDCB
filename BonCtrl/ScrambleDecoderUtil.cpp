@@ -119,12 +119,24 @@ BOOL CScrambleDecoderUtil::SetNetwork(WORD ONID, WORD TSID)
 	}
 
 	if( CompareNoCase(dllPath, this->currentDll) != 0 ){
+		wstring curDir = L"";
+		wstring dllDir = L"";
+		if( GetCurrentDirectory(512, buff) != 0 ){
+			curDir = buff;
+			if( _wsplitpath_s(dllPath.c_str(), NULL, 0, buff, 512, NULL, 0, NULL, 0) == 0 ){
+				dllDir = buff;
+				SetCurrentDirectory(dllDir.c_str());
+			}
+		}
 		if( LoadDll(dllPath.c_str()) == FALSE ){
 			_OutputDebugString(L"š%s ‚Ìƒ[ƒh‚ÉŽ¸”s‚µ‚Ü‚µ‚½B\r\n", dllPath.c_str());
 			this->currentDll = L"";
 		}else{
 			this->currentDll = dllPath;
 			ret = TRUE;
+		}
+		if( curDir.size() != 0 ){
+			SetCurrentDirectory(curDir.c_str());
 		}
 	}
 
