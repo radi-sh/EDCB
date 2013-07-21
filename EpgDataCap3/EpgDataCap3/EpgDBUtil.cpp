@@ -32,8 +32,6 @@ CEpgDBUtil::CEpgDBUtil(void)
 CEpgDBUtil::~CEpgDBUtil(void)
 {
 	Clear();
-	ClearSectionStatus();
-	ClearSectionStatusSD();
 
 	map<DWORD, DB_TS_INFO*>::iterator itrInfo;
 	for( itrInfo = this->serviceInfoList.begin(); itrInfo != this->serviceInfoList.end(); itrInfo++ ){
@@ -88,27 +86,15 @@ void CEpgDBUtil::UnLock(LPCWSTR log)
 
 void CEpgDBUtil::Clear()
 {
-	map<ULONGLONG, SERVICE_EVENT_INFO*>::iterator itr;
-	for( itr = this->serviceEventMap.begin(); itr != this->serviceEventMap.end(); itr++ ){
-		SAFE_DELETE(itr->second);
-	}
-	this->serviceEventMap.clear();
+	ClearEvent();
 
-	for( itr = this->serviceEventMapSD.begin(); itr != this->serviceEventMapSD.end(); itr++ ){
-		SAFE_DELETE(itr->second);
-	}
-	this->serviceEventMapSD.clear();
+	ClearEventSD();
 }
 
 void CEpgDBUtil::SetStreamChangeEvent()
 {
 	if( Lock() == FALSE ) return ;
-	//ストリーム変わったのでp/fをリセット
-	map<ULONGLONG, SERVICE_EVENT_INFO*>::iterator itr;
-	for( itr = this->serviceEventMap.begin(); itr != this->serviceEventMap.end(); itr++ ){
-		itr->second->nowEvent = NULL;
-		itr->second->nextEvent = NULL;
-	}
+	ClearEvent();
 	UnLock();
 }
 
@@ -1170,9 +1156,10 @@ void CEpgDBUtil::ClearSectionStatus()
 
 	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itr;
 	for( itr = this->sectionMap.begin(); itr != this->sectionMap.end(); itr++ ){
-		SAFE_DELETE(itr->second);
+		itr->second->sectionPF.Clear();
+		itr->second->sectionBasic.Clear();
+		itr->second->sectionExt.Clear();
 	}
-	this->sectionMap.clear();
 
 	UnLock();
 }
@@ -1604,7 +1591,7 @@ BOOL CEpgDBUtil::AddSDT(CSDTTable* sdt)
 	if( sdt->table_id == 0x42 ){
 		if( this->ONID != sdt->original_network_id ){
 			this->ONID = sdt->original_network_id;
-			ClearSectionStatusSD();
+			ClearEventSD();
 		}
 		if( this->TSID != sdt->transport_stream_id ){
 			this->TSID = sdt->transport_stream_id;
@@ -2388,11 +2375,32 @@ BOOL CEpgDBUtil::AddEIT_SD2(WORD PID, CEITTable_SD2* eit)
 	return NO_ERR;
 }
 
-void CEpgDBUtil::ClearSectionStatusSD()
+void CEpgDBUtil::ClearEvent()
 {
-	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itr;
-	for( itr = this->sectionMapSD.begin(); itr != this->sectionMapSD.end(); itr++ ){
+	map<ULONGLONG, SERVICE_EVENT_INFO*>::iterator itr;
+	for( itr = this->serviceEventMap.begin(); itr != this->serviceEventMap.end(); itr++ ){
 		SAFE_DELETE(itr->second);
+	}
+	this->serviceEventMap.clear();
+
+	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itrSec;
+	for( itrSec = this->sectionMap.begin(); itrSec != this->sectionMap.end(); itrSec++ ){
+		SAFE_DELETE(itrSec->second);
+	}
+	this->sectionMap.clear();
+}
+
+void CEpgDBUtil::ClearEventSD()
+{
+	map<ULONGLONG, SERVICE_EVENT_INFO*>::iterator itr;
+	for( itr = this->serviceEventMapSD.begin(); itr != this->serviceEventMapSD.end(); itr++ ){
+		SAFE_DELETE(itr->second);
+	}
+	this->serviceEventMapSD.clear();
+
+	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itrSec;
+	for( itrSec = this->sectionMapSD.begin(); itrSec != this->sectionMapSD.end(); itrSec++ ){
+		SAFE_DELETE(itrSec->second);
 	}
 	this->sectionMapSD.clear();
 }

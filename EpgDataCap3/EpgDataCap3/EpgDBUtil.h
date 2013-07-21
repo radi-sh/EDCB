@@ -114,6 +114,7 @@ typedef struct _SERVICE_EVENT_INFO{
 		for( itr = eventMap.begin(); itr != eventMap.end(); itr++ ){
 			SAFE_DELETE(itr->second);
 		}
+		this->eventMap.clear();
 	};
 } SERVICE_EVENT_INFO;
 
@@ -332,7 +333,8 @@ protected:
 	BOOL CheckUpdate_SD(CEITTable_SD* eit, BYTE tableID, BYTE version);
 
 	BOOL AddSDEventMap(CEITTable_SD* eit);
-	void ClearSectionStatusSD();
+	void ClearEvent();
+	void ClearEventSD();
 
 	void CopyEpgInfo(EPG_EVENT_INFO* destInfo, EVENT_INFO* srcInfo);
 };
