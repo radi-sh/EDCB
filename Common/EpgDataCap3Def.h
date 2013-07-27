@@ -13,6 +13,23 @@ typedef enum{
 	EpgLEITAll			= 0x0080,	//ワンセグがたまった
 } EPG_SECTION_STATUS;
 
+//EPGデータ取得設定
+typedef enum{
+	EpgGetServiceVideo		= 0x0000,	//映像サービスを取得する
+	EpgGetServiceAudio		= 0x0001,	//音声サービスを取得する
+	EpgGetServiceData		= 0x0002,	//データサービスを取得する
+	EpgGetServiceOther		= 0x0004,	//その他サービスを取得する
+	EpgGetServiceTemporary	= 0x0008,	//臨時サービスを取得する
+	EpgGetLengthLong		= 0x0000,	//7日分の情報を取得する
+	EpgGetLengthShort		= 0x0010,	//2日分の情報を取得する
+	EpgGetInfoPf			= 0x0100,	//自ストリームのp/f情報を取得する
+	EpgGetInfoBasic			= 0x0200,	//自ストリームの基本情報を取得する
+	EpgGetInfoExt			= 0x0400,	//自ストリームの基本情報と拡張情報を取得する
+	EpgGetOtherInfoPf		= 0x1000,	//他ストリームのp/f情報を取得する
+	EpgGetOtherInfoBasic	= 0x2000,	//他ストリームの基本情報を取得する
+	EpgGetOtherInfoExt		= 0x4000,	//他ストリームの基本情報と拡張情報を取得する
+} EPG_GET_SETTINGS;
+
 //EPG基本情報
 typedef struct _EPG_SHORT_EVENT_INFO{
 	WORD event_nameLength;		//event_nameの文字数
