@@ -159,6 +159,15 @@ void WINAPI ClearSectionStatusEP(
 	DWORD id
 	);
 
+//EPG取得内容の設定
+//引数：
+// id						[IN]識別ID
+// settings					[IN]設定値
+__declspec(dllexport)
+void WINAPI SetEpgGetSettingsEP(
+	WORD settings
+	);
+
 //EPGデータの蓄積状態を取得する
 //戻り値：
 // ステータス

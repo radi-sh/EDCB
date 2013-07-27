@@ -169,6 +169,13 @@ public:
 	//EPGデータの蓄積状態をリセットする
 	void ClearSectionStatus();
 
+	//EPG取得内容の設定
+	//引数：
+	// settings		[IN]設定値
+	void SetEpgGetSettings(
+		WORD settings
+		);
+
 	//EPGデータの蓄積状態を取得する
 	//戻り値：
 	// ステータス
@@ -309,6 +316,9 @@ protected:
 	WORD ONID;
 	WORD TSID;
 	SYSTEMTIME tdtTime;
+
+	WORD epgGetSettings;
+
 protected:
 	//PublicAPI排他制御用
 	BOOL Lock(LPCWSTR log = NULL, DWORD timeOut = 60*1000);
@@ -334,6 +344,7 @@ protected:
 
 	BOOL AddSDEventMap(CEITTable_SD* eit);
 	void ClearEvent();
+	void ClearSectionMap();
 	void ClearEventSD();
 
 	void CopyEpgInfo(EPG_EVENT_INFO* destInfo, EVENT_INFO* srcInfo);

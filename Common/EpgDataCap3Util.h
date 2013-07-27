@@ -110,6 +110,15 @@ typedef void (WINAPI *ClearSectionStatusEP3)(
 	DWORD id
 	);
 
+//EPG取得内容の設定
+//引数：
+// id						[IN]識別ID
+// settings					[IN]設定値
+typedef void (WINAPI *SetEpgGetSettingsEP3)(
+	DWORD id,
+	WORD settings
+	);
+
 //EPGデータの蓄積状態を取得する
 //戻り値：
 // ステータス
@@ -257,6 +266,13 @@ public:
 	//EPGデータの蓄積状態をリセットする
 	void ClearSectionStatus();
 
+	//EPG取得内容の設定
+	//引数：
+	// settings		[IN]設定値
+	void SetEpgGetSettings(
+		WORD settings
+		);
+
 	//EPGデータの蓄積状態を取得する
 	//戻り値：
 	// ステータス
@@ -319,6 +335,7 @@ protected:
 	SetStreamChangeEventEP3	pfnSetStreamChangeEventEP3;
 	GetEpgInfoListEP3		pfnGetEpgInfoListEP3;
 	ClearSectionStatusEP3	pfnClearSectionStatusEP3;
+	SetEpgGetSettingsEP3	pfnSetEpgGetSettingsEP3;
 	GetSectionStatusEP3		pfnGetSectionStatusEP3;
 	GetServiceListActualEP3	pfnGetServiceListActualEP3;
 	GetServiceListEpgDBEP3	pfnGetServiceListEpgDBEP3;
