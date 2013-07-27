@@ -850,7 +850,15 @@ DWORD CDecodeUtil::GetServiceListActual(
 					this->serviceList[count].extInfo->ts_name = new WCHAR[ts_nameW.size()+1];
 					wcscpy_s(this->serviceList[count].extInfo->ts_name, ts_nameW.size()+1, ts_nameW.c_str());
 				}
-				if( firstFlag == TRUE ){
+				if( 0x7880 <= itrSdt->second->original_network_id && itrSdt->second->original_network_id <= 0x7FEB ){
+					if( (this->serviceList[count].service_id & 0x0187) == 0x0000 ){
+						this->serviceList[count].extInfo->remote_control_key_id = remote_control_key_id;
+					}
+					this->serviceList[count].extInfo->direct_tuning_number = 
+							(((this->serviceList[count].service_id & 0x0180) >> 7) * 200) +	//サービス種別 * 200 +
+							(remote_control_key_id * 10) +									//リモコンキーID * 10 +
+							((this->serviceList[count].service_id & 0x0007) + 1);			//サービス番号 + 1
+				}else{
 					this->serviceList[count].extInfo->remote_control_key_id = remote_control_key_id;
 				}
 				this->serviceList[count].extInfo->partialReceptionFlag = FALSE;

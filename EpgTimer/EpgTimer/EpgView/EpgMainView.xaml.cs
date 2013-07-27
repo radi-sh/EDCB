@@ -1854,6 +1854,7 @@ namespace EpgTimer
                         if (CommonManager.Instance.DB.ServiceEventList.ContainsKey(id) == true)
                         {
                             serviceInfo.serviceInfo.remote_control_key_id = CommonManager.Instance.DB.ServiceEventList[id].serviceInfo.remote_control_key_id;
+                            serviceInfo.serviceInfo.direct_tuning_number = CommonManager.Instance.DB.ServiceEventList[id].serviceInfo.direct_tuning_number;
                         }
                         
                         serviceEventList.Add(id, serviceInfo);

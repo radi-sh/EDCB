@@ -722,6 +722,7 @@ void CtrlCmdUtil::CopyData(Def::EpgServiceInfo^ src, EPGDB_SERVICE_INFO* dest)
 	dest->network_name = network_namePin;
 	dest->ts_name = ts_namePin;
 	dest->remote_control_key_id = src->remote_control_key_id;
+	dest->direct_tuning_number = src->direct_tuning_number;
 }
 
 void CtrlCmdUtil::CopyData(EPGDB_SERVICE_INFO* src, Def::EpgServiceInfo^% dest)
@@ -736,6 +737,7 @@ void CtrlCmdUtil::CopyData(EPGDB_SERVICE_INFO* src, Def::EpgServiceInfo^% dest)
 	dest->network_name = gcnew String(src->network_name.c_str());
 	dest->ts_name = gcnew String(src->ts_name.c_str());
 	dest->remote_control_key_id = src->remote_control_key_id;
+	dest->direct_tuning_number = src->direct_tuning_number;
 }
 
 void CtrlCmdUtil::CopyData(Def::EpgSearchDateInfo^ src, EPGDB_SEARCH_DATE_INFO* dest)

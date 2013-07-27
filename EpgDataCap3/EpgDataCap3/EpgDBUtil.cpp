@@ -1877,7 +1877,19 @@ DWORD CEpgDBUtil::GetServiceListEpgDB(
 
 				this->serviceDBList[count].extInfo->service_type = item->service_type;
 				this->serviceDBList[count].extInfo->partialReceptionFlag = item->partialReceptionFlag;
-				this->serviceDBList[count].extInfo->remote_control_key_id = info->remote_control_key_id;
+				if( info->remote_control_key_id != 0 ){
+					if( 0x7880 <= item->original_network_id && item->original_network_id <= 0x7FEB ){
+						if( (item->service_id & 0x0187) == 0x0000 ){
+							this->serviceDBList[count].extInfo->remote_control_key_id = info->remote_control_key_id;
+						}
+						this->serviceDBList[count].extInfo->direct_tuning_number = 
+								(((item->service_id & 0x0180) >> 7) * 200) +	//サービス種別 * 200 +
+								(info->remote_control_key_id * 10) +			//リモコンキーID * 10 +
+								((item->service_id & 0x0007) + 1);				//サービス番号 + 1
+					}else{
+						this->serviceDBList[count].extInfo->remote_control_key_id = info->remote_control_key_id;
+					}
+				}
 
 				if( item->service_provider_name.size() > 0 ){
 					this->serviceDBList[count].extInfo->service_provider_name = new WCHAR[item->service_provider_name.size()+1];

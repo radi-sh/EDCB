@@ -40,36 +40,79 @@ namespace EpgTimer.EpgView
             {
                 TextBlock item = new TextBlock();
                 item.Text = info.service_name;
+                if (0x7880 <= info.ONID && info.ONID <= 0x7FE8)
+                {
+                    item.Text += "\r\n" + "地デジ ";
+                }
+                else if (info.ONID == 0x0004)
+                {
+                    item.Text += "\r\n" + "BS ";
+                }
+                else if (info.ONID == 0x0006 || info.ONID == 0x0007)
+                {
+                    item.Text += "\r\n" + "CS ";
+                }
+                else if (info.ONID == 0x000A)
+                {
+                    item.Text += "\r\n" + "スカパー! ";
+                }
+                else if (info.ONID == 0x0001 || info.ONID == 0x0003)
+                {
+                    item.Text += "\r\n" + "スカパー!SD ";
+                }else
+                {
+                    item.Text += "\r\n" + " ";
+                }
+                
                 if (info.remote_control_key_id != 0)
                 {
-                    item.Text += "\r\n" + info.remote_control_key_id.ToString();
+                    switch (info.remote_control_key_id)
+                    {
+                        case 1:
+                            item.Text += "①";
+                            break;
+                        case 2:
+                            item.Text += "②";
+                            break;
+                        case 3:
+                            item.Text += "③";
+                            break;
+                        case 4:
+                            item.Text += "④";
+                            break;
+                        case 5:
+                            item.Text += "⑤";
+                            break;
+                        case 6:
+                            item.Text += "⑥";
+                            break;
+                        case 7:
+                            item.Text += "⑦";
+                            break;
+                        case 8:
+                            item.Text += "⑧";
+                            break;
+                        case 9:
+                            item.Text += "⑨";
+                            break;
+                        case 10:
+                            item.Text += "⑩";
+                            break;
+                        case 11:
+                            item.Text += "⑪";
+                            break;
+                        case 12:
+                            item.Text += "⑫";
+                            break;
+                    }
+                }
+                if (info.direct_tuning_number != 0)
+                {
+                    item.Text += info.direct_tuning_number.ToString("000");
                 }
                 else
                 {
-                    if (0x7880 <= info.ONID && info.ONID <= 0x7FE8)
-                    {
-                        item.Text += "\r\n" + "地デジ " + info.SID.ToString("000");
-                    }
-                    else if (info.ONID == 0x0004)
-                    {
-                        item.Text += "\r\n" + "BS " + info.SID.ToString("000");
-                    }
-                    else if (info.ONID == 0x0006 || info.ONID == 0x0007)
-                    {
-                        item.Text += "\r\n" + "CS " + (info.SID & 0x3FF).ToString("000");
-                    }
-                    else if (info.ONID == 0x000A)
-                    {
-                        item.Text += "\r\n" + "スカパー! " + (info.SID & 0x3FF).ToString("000");
-                    }
-                    else if (info.ONID == 0x0001 || info.ONID == 0x0003)
-                    {
-                        item.Text += "\r\n" + "スカパー!SD " + (info.SID & 0x3FF).ToString("000");
-                    }
-                    else
-                    {
-                        item.Text += "\r\n" + info.network_name + " " + (info.SID & 0x3FF).ToString("000");
-                    }
+                    item.Text += (info.SID & 0x3FF).ToString("000");
                 }
                 item.Width = Settings.Instance.ServiceWidth - 4;
                 item.Margin = new Thickness(2, 2, 2, 2);

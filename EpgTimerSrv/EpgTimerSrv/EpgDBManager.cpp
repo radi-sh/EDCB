@@ -234,6 +234,7 @@ UINT WINAPI CEpgDBManager::LoadThread(LPVOID param)
 				item->serviceInfo.ts_name = serviceList[i].extInfo->ts_name;
 			}
 			item->serviceInfo.remote_control_key_id = serviceList[i].extInfo->remote_control_key_id;
+			item->serviceInfo.direct_tuning_number = serviceList[i].extInfo->direct_tuning_number;
 		}
 		sys->epgMap.insert(pair<LONGLONG, EPGDB_SERVICE_DATA*>(key, item));
 

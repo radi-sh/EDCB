@@ -193,6 +193,8 @@ DWORD CRestApiManager::GetEnumService(string param, HTTP_STREAM* sendParam, CEpg
 			serviceinfo += buff;
 			Format(buff, L"<remote_control_key_id>%d</remote_control_key_id>", list[i].remote_control_key_id);
 			serviceinfo += buff;
+			Format(buff, L"<direct_tuning_number>%d</direct_tuning_number>", list[i].direct_tuning_number);
+			serviceinfo += buff;
 			serviceinfo += L"</serviceinfo>";
 		}
 		xml += serviceinfo;

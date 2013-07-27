@@ -749,6 +749,10 @@ namespace Def {
 		/// リモコンキーID
 		/// </summary>
 		property BYTE remote_control_key_id;
+		/// <summary>
+		/// ダイレクト選局番号
+		/// </summary>
+		property WORD direct_tuning_number;
 
 	public:
 		EpgServiceInfo(void){
@@ -762,6 +766,7 @@ namespace Def {
 			network_name = gcnew String("");
 			ts_name = gcnew String("");
 			remote_control_key_id = 0;
+			direct_tuning_number = 0;
 		};
 	};
 

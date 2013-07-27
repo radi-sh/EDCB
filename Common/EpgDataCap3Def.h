@@ -178,6 +178,7 @@ typedef struct _SERVICE_EXT_INFO{
 	WCHAR* network_name;
 	WCHAR* ts_name;
 	BYTE remote_control_key_id;
+	WORD direct_tuning_number;	//ダイレクト選局番号
 	_SERVICE_EXT_INFO(void){
 		service_type = 0;
 		partialReceptionFlag = FALSE;
@@ -186,6 +187,7 @@ typedef struct _SERVICE_EXT_INFO{
 		network_name = NULL;
 		ts_name = NULL;
 		remote_control_key_id = 0;
+		direct_tuning_number = 0;
 	};
 	~_SERVICE_EXT_INFO(void){
 		SAFE_DELETE_ARRAY(service_provider_name);

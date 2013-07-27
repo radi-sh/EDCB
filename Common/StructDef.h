@@ -545,6 +545,7 @@ typedef struct _EPGDB_SERVICE_INFO{
 	wstring network_name;
 	wstring ts_name;
 	BYTE remote_control_key_id;
+	WORD direct_tuning_number;
 	_EPGDB_SERVICE_INFO(void){
 		ONID = 0;
 		TSID = 0;
@@ -556,6 +557,7 @@ typedef struct _EPGDB_SERVICE_INFO{
 		network_name = L"";
 		ts_name = L"";
 		remote_control_key_id = 0;
+		direct_tuning_number = 0;
 	};
 	~_EPGDB_SERVICE_INFO(void){
 	};
@@ -570,6 +572,7 @@ typedef struct _EPGDB_SERVICE_INFO{
 		network_name = o.network_name;
 		ts_name = o.ts_name;
 		remote_control_key_id = o.remote_control_key_id;
+		direct_tuning_number = o.direct_tuning_number;
 		return *this;
 	};
 }EPGDB_SERVICE_INFO;

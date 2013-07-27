@@ -1386,6 +1386,7 @@ DWORD GetVALUESize( EPGDB_SERVICE_INFO* val )
 	size += GetVALUESize(val->network_name);
 	size += GetVALUESize(val->ts_name);
 	size += GetVALUESize(val->remote_control_key_id);
+	size += GetVALUESize(val->direct_tuning_number);
 
 	return size;
 }
@@ -1442,6 +1443,10 @@ BOOL WriteVALUE( EPGDB_SERVICE_INFO* val, BYTE* buff, DWORD buffSize, DWORD* wri
 		}
 		pos += size;
 		if( WriteVALUE( val->remote_control_key_id, buff + pos, buffSize - pos, &size ) == FALSE ){
+			return FALSE;
+		}
+		pos += size;
+		if( WriteVALUE( val->direct_tuning_number, buff + pos, buffSize - pos, &size ) == FALSE ){
 			return FALSE;
 		}
 		pos += size;
@@ -1508,6 +1513,10 @@ BOOL ReadVALUE( EPGDB_SERVICE_INFO* val, BYTE* buff, DWORD buffSize, DWORD* read
 		}
 		pos += size;
 		if( ReadVALUE( &val->remote_control_key_id, buff + pos, buffSize - pos, &size ) == FALSE ){
+			return FALSE;
+		}
+		pos += size;
+		if( ReadVALUE( &val->direct_tuning_number, buff + pos, buffSize - pos, &size ) == FALSE ){
 			return FALSE;
 		}
 		pos += size;
