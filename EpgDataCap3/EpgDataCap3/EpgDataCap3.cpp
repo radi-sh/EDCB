@@ -295,23 +295,6 @@ void WINAPI ClearSectionStatusEP(
 	itr->second->ClearSectionStatus();
 }
 
-//EPG取得内容の設定
-//引数：
-// settings		[IN]設定値
-void WINAPI SetEpgGetSettingsEP(
-	DWORD id,
-	WORD settings
-	)
-{
-	map<DWORD, CEpgDataCap3Main*>::iterator itr;
-	itr = g_List.find(id);
-	if( itr == g_List.end() ){
-		return;
-	}
-
-	itr->second->SetEpgGetSettings(settings);
-}
-
 //EPGデータの蓄積状態を取得する
 //戻り値：
 // ステータス

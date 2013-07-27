@@ -130,7 +130,7 @@ UINT WINAPI CEpgDBManager::LoadThread(LPVOID param)
 	}
 
 	//EPGファイルの検索
-	multimap<LONGLONG, wstring> epgFileList;
+	vector<wstring> epgFileList;
 	wstring epgDataPath = L"";
 	GetSettingPath(epgDataPath);
 	epgDataPath += EPG_SAVE_FOLDER;
@@ -155,9 +155,8 @@ UINT WINAPI CEpgDBManager::LoadThread(LPVOID param)
 				//見つかったファイルを一覧に追加
 				wstring epgFilePath = L"";
 				Format(epgFilePath, L"%s\\%s", epgDataPath.c_str(), findData.cFileName);
-				LONGLONG fileTime = ((LONGLONG)findData.ftLastWriteTime.dwHighDateTime<<32) | (LONGLONG)findData.ftLastWriteTime.dwLowDateTime;
 
-				epgFileList.insert(pair<LONGLONG, wstring>(fileTime, epgFilePath));
+				epgFileList.push_back(epgFilePath);
 			}
 		}
 	}while(FindNextFile(find, &findData));
@@ -165,9 +164,8 @@ UINT WINAPI CEpgDBManager::LoadThread(LPVOID param)
 	FindClose(find);
 
 	//EPGファイルの解析
-	multimap<LONGLONG, wstring>::iterator itr;
-	for( itr = epgFileList.begin(); itr != epgFileList.end(); itr++ ){
-		HANDLE file = _CreateFile( itr->second.c_str(), GENERIC_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
+	for( size_t i=0; i<epgFileList.size(); i++ ){
+		HANDLE file = _CreateFile( epgFileList[i].c_str(), GENERIC_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
 		if( file != INVALID_HANDLE_VALUE ){
 			FILETIME CreationTime;
 			FILETIME LastAccessTime;
@@ -178,8 +176,8 @@ UINT WINAPI CEpgDBManager::LoadThread(LPVOID param)
 			if( fileTime + 7*24*60*60*I64_1SEC < GetNowI64Time() ){
 				//1週間以上前のファイルなので削除
 				CloseHandle(file);
-				DeleteFile( itr->second.c_str() );
-				_OutputDebugString(L"★delete %s", itr->second.c_str());
+				DeleteFile( epgFileList[i].c_str() );
+				_OutputDebugString(L"★delete %s", epgFileList[i].c_str());
 			}else{
 
 				DWORD fileSize = GetFileSize( file, NULL );

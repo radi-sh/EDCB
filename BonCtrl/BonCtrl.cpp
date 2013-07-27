@@ -756,20 +756,6 @@ void CBonCtrl::ClearSectionStatus()
 	return ;
 }
 
-//EPG取得内容の設定
-//引数：
-// settings		[IN]設定値
-void CBonCtrl::SetEpgGetSettings(
-	WORD settings
-	)
-{
-	if( Lock(L"SetEpgGetSettings") == FALSE ) return;
-	this->tsOut.SetEpgGetSettings(settings);
-
-	UnLock();
-	return;
-}
-
 //EPGデータの蓄積状態を取得する
 //戻り値：
 // ステータス

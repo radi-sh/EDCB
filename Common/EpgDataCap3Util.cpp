@@ -27,7 +27,6 @@ BOOL CEpgDataCap3Util::LoadDll(void)
 	pfnSetStreamChangeEventEP3 = NULL;
 	pfnGetEpgInfoListEP3 = NULL;
 	pfnClearSectionStatusEP3 = NULL;
-	pfnSetEpgGetSettingsEP3 = NULL;
 	pfnGetSectionStatusEP3 = NULL;
 	pfnGetServiceListActualEP3 = NULL;
 	pfnGetServiceListEpgDBEP3 = NULL;
@@ -84,12 +83,6 @@ BOOL CEpgDataCap3Util::LoadDll(void)
 	pfnClearSectionStatusEP3 = ( ClearSectionStatusEP3 ) ::GetProcAddress( module , "ClearSectionStatusEP");
 	if( !pfnClearSectionStatusEP3 ){
 		OutputDebugString(L"ClearSectionStatusEPの GetProcAddress に失敗\r\n");
-		ret = FALSE;
-		goto ERR_END;
-	}
-	pfnSetEpgGetSettingsEP3 = ( SetEpgGetSettingsEP3 ) ::GetProcAddress( module , "SetEpgGetSettingsEP");
-	if( !pfnSetEpgGetSettingsEP3 ){
-		OutputDebugString(L"SetEpgGetSettingsEPの GetProcAddress に失敗\r\n");
 		ret = FALSE;
 		goto ERR_END;
 	}
@@ -156,7 +149,6 @@ BOOL CEpgDataCap3Util::UnLoadDll(void)
 	pfnGetTSIDEP3 = NULL;
 	pfnGetEpgInfoListEP3 = NULL;
 	pfnClearSectionStatusEP3 = NULL;
-	pfnSetEpgGetSettingsEP3 = NULL;
 	pfnGetSectionStatusEP3 = NULL;
 	pfnGetServiceListActualEP3 = NULL;
 	pfnGetServiceListEpgDBEP3 = NULL;
@@ -308,19 +300,6 @@ void CEpgDataCap3Util::ClearSectionStatus()
 		return ;
 	}
 	pfnClearSectionStatusEP3(id);
-}
-
-//EPG取得内容の設定
-//引数：
-// settings		[IN]設定値
-void CEpgDataCap3Util::SetEpgGetSettings(
-	WORD settings
-	)
-{
-	if( module == NULL || id == 0 ){
-		return ;
-	}
-	pfnSetEpgGetSettingsEP3(id, settings);
 }
 
 //EPGデータの蓄積状態を取得する

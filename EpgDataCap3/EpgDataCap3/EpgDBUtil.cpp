@@ -27,8 +27,6 @@ CEpgDBUtil::CEpgDBUtil(void)
 	this->TSID = 0;
 	SYSTEMTIME tmp = {0,};
 	memcpy(&this->tdtTime, &tmp, sizeof(SYSTEMTIME));
-
-	epgGetSettings = EpgGetServiceVideo | EpgGetLengthLong | EpgGetInfoExt | EpgGetOtherInfoExt;
 }
 
 CEpgDBUtil::~CEpgDBUtil(void)
@@ -96,7 +94,7 @@ void CEpgDBUtil::Clear()
 void CEpgDBUtil::SetStreamChangeEvent()
 {
 	if( Lock() == FALSE ) return ;
-	ClearSectionMap();
+	ClearEvent();
 	UnLock();
 }
 
@@ -1166,91 +1164,40 @@ void CEpgDBUtil::ClearSectionStatus()
 	UnLock();
 }
 
-//EPG取得内容の設定
-//引数：
-// settings		[IN]設定値
-void CEpgDBUtil::SetEpgGetSettings( WORD settings )
+BOOL CheckSectionDay(const SECTION_FLAG_INFO * section, SYSTEMTIME time, WORD count, WORD * errPos, ULONGLONG * errData)
 {
-	epgGetSettings = settings;
-}
-
-BOOL CheckSectionAll(const SECTION_FLAG_INFO * section, WORD now, WORD count, WORD * getCount, WORD * totalCount)
-{
-	BOOL result = TRUE;
-	WORD last;
-	if( count != 0 ){
-		last = now + count - 1;
-	}else{
-		last = section->last_section_number;
-		if( last >= 2048 ){
-			last = 2047;
-		}
-	}
-	for( WORD i=now; i<=last; i++ ){
-		if( totalCount != NULL ){
-			totalCount[i/64]++;
-		}
-		if( (section->sectionFlag[i/64] & (1ULL<<(i%64))) == 0 ){
-			result = FALSE;
-		}else{
-			if( getCount != NULL ){
-				getCount[i/64]++;
-			}
-		}
-	}
-	return result;
-}
-
-void _DebugSectinInfo(WORD startPos, WORD endPos, WORD * getCount, WORD * totalCount)
-{
-#ifdef _DEBUG
-	for( WORD i=startPos; i<=endPos; i++ ){
-		_OutputDebugString(L"    %02d:get[%d] / total[%d]\r\n", i, getCount[i], totalCount[i]);
-	}
-#endif
-}
-
-//PerfecTVサービスのEIT(スケジュール)
-//テーブル番号下3bitが固定で日付に対応する
-//    0: 1日～4日
-//    1: 5日～8日
-//    2: 9日～12日
-//    3: 13日～16日
-//    4: 17日～20日
-//    5: 21日～24日
-//    6: 25日～28日
-//    7: 26日～31日
-//基本情報は7日分、拡張情報は3日分提供され、情報の追加は3時間単位で行われる…ような気がする
-BOOL CheckSectionDay(const SECTION_FLAG_INFO * section, SYSTEMTIME time, WORD count, WORD * getCount, WORD * totalCount)
-{
-	BOOL result = TRUE;
 	for( int i=0; i<count/8; i++ ){
 		WORD pos = (time.wHour / 3) * 8;
 		for( int j=pos; j<pos+8; j++ ){
-			if( totalCount != NULL ){
-				totalCount[time.wDay-1]++;
-			}
 			if( (section->sectionFlag[time.wDay-1] & (1ULL<<j)) == 0 ){
-				result = FALSE;
-			}else{
-				if( getCount != NULL ){
-					getCount[time.wDay-1]++;
+				if( errPos != NULL ){
+					*errPos = ((time.wDay - 1) * 64) + j;
 				}
+				if( errData != NULL ){
+					*errData = section->sectionFlag[time.wDay-1];
+				}
+				return FALSE;
 			}
 		}
 		GetSumTime(time, 3*60*60, &time);
 	}
-	return result;
+	return TRUE;
 }
 
-void _DebugSectinInfoDay(SYSTEMTIME time, WORD days, WORD * getCount, WORD * totalCount)
+BOOL CheckSectionAll(const SECTION_FLAG_INFO * section, WORD now, WORD * errPos, ULONGLONG * errData)
 {
-#ifdef _DEBUG
-	for( WORD i=0; i<days; i++ ){
-		_OutputDebugString(L"    %02d:get[%d] / total[%d]\r\n", time.wDay-1, getCount[time.wDay-1], totalCount[time.wDay-1]);
-		GetSumTime(time, 24*60*60, &time);
+	for( WORD i=now; i<=section->last_section_number; i++ ){
+		if( (section->sectionFlag[i/64] & (1ULL<<(i%64))) == 0 ){
+			if( errPos != NULL ){
+				*errPos = i;
+			}
+			if( errData != NULL ){
+				*errData = section->sectionFlag[i/64];
+			}
+			return FALSE;
+		}
 	}
-#endif
+	return TRUE;
 }
 
 EPG_SECTION_STATUS CEpgDBUtil::GetSectionStatus(BOOL l_eitFlag)
@@ -1271,234 +1218,170 @@ EPG_SECTION_STATUS CEpgDBUtil::GetSectionStatus(BOOL l_eitFlag)
 	BOOL otherPfFlag = TRUE;
 
 	WORD now = (tdtTime.wHour / 3) * 8;
-
-	WORD basicTotalCount[32] = {0,};
-	WORD basicGetCount[32] = {0,};
-	WORD extTotalCount[32] = {0,};
-	WORD extGetCount[32] = {0,};
-	WORD pfTotalCount[32] = {0,};
-	WORD pfGetCount[32] = {0,};
-	WORD otherBasicTotalCount[32] = {0,};
-	WORD otherBasicGetCount[32] = {0,};
-	WORD otherExtTotalCount[32] = {0,};
-	WORD otherExtGetCount[32] = {0,};
-	WORD otherPfTotalCount[32] = {0,};
-	WORD otherPfGetCount[32] = {0,};
-
-	BOOL serviceAudio = !!(epgGetSettings & EpgGetServiceAudio);
-	BOOL serviceData = !!(epgGetSettings & EpgGetServiceData);
-	BOOL serviceOther = !!(epgGetSettings & EpgGetServiceOther);
-
-	BOOL serviceTemporary = !!(epgGetSettings & EpgGetServiceTemporary);
-
-	BOOL lengthShort = !!(epgGetSettings & EpgGetLengthShort);
-
-	BOOL otherInfoExt = !!(epgGetSettings & EpgGetOtherInfoExt);
-	BOOL otherInfoBasic = !!(epgGetSettings & EpgGetOtherInfoBasic) || otherInfoExt;
-	BOOL otherInfoPf = !!(epgGetSettings & EpgGetOtherInfoPf) || otherInfoBasic;
-
-	BOOL infoExt = !!(epgGetSettings & EpgGetInfoExt) || otherInfoExt;
-	BOOL infoBasic = !!(epgGetSettings & EpgGetInfoBasic) || otherInfoBasic || infoExt;
-	BOOL infoPf = !!(epgGetSettings & EpgGetInfoPf) || otherInfoPf || infoBasic;
-
-	WORD epgSections = 0;
-	if( lengthShort == TRUE ){
-		epgSections = 128;
-	}
+	WORD errPos;
+	ULONGLONG errData;
 
 	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itr;
 	for( itr = this->sectionMap.begin(); itr != this->sectionMap.end(); itr++ ){
 
-		//サービスリストあるなら指定サービスのみ対象
+		//サービスリストあるなら映像・音声サービスのみ対象
 		map<ULONGLONG, BYTE>::iterator itrType;
 		itrType = this->serviceList.find(itr->first);
 		if( itrType != this->serviceList.end() ){
-			if( itrType->second != 0x01											//映像
-					&& (itrType->second != 0x02 || serviceAudio == FALSE)		//音声
-					&& (itrType->second != 0x80 || serviceOther == FALSE)		//
-					&& itrType->second != 0x81									//プロモ映像
-					&& (itrType->second != 0xA1 || serviceTemporary == FALSE)	//臨時映像
-					&& (itrType->second != 0xA2 || serviceTemporary == FALSE || serviceAudio == FALSE)	//臨時音声
-					&& (itrType->second != 0xA3 || serviceTemporary == FALSE || serviceData == FALSE)	//臨時データ
-					&& (itrType->second != 0xA4	|| serviceOther == FALSE)		//ES
-					&& itrType->second != 0xA5									//プロモ映像
-					&& (itrType->second != 0xA6 || serviceAudio == FALSE)		//プロモ音声
-					&& (itrType->second != 0xA7	|| serviceData == FALSE)		//プロモデータ
-					&& (itrType->second != 0xC0 || serviceData == FALSE)		//データ
+			if( itrType->second != 0x01			//映像
+					&& itrType->second != 0x02	//音声
+				//	&& itrType->second != 0x80	//
+					&& itrType->second != 0x81	//
+					&& itrType->second != 0xA1	//臨時映像
+					&& itrType->second != 0xA2	//臨時音声
+					&& itrType->second != 0xA3	//臨時データ
+				//	&& itrType->second != 0xA4	//ES
+					&& itrType->second != 0xA5	//プロモ映像
+					&& itrType->second != 0xA6	//プロモ音声
+					&& itrType->second != 0xA7	//プロモデータ
+					&& itrType->second != 0xC0	//データ
 					){
 				continue;
 			}
 		}
+//		_OutputDebugString(L"0x%I64X, %x,%x, %x,%x, \r\n",itr->first, itr->second->last_section_numberBasic, itr->second->last_table_idBasic, itr->second->last_section_numberExt, itr->second->last_table_idExt);
 
-		//p/f
+		//自ストリーム
 		if( itr->second->otherStreamFlag == 0 ){
-			//自ストリーム
-			if( infoPf == TRUE ){
-				//p/f EIT_present_following_flagに従う
-				if( itr->second->EIT_present_following_flag == 1 ){
-					if( CheckSectionAll(&itr->second->sectionPF, 0, 0, pfGetCount, pfTotalCount) == FALSE ){
-						pfFlag = FALSE;
+			// EIT(p/f) EIT_present_following_flagに従う
+			if( pfFlag == TRUE && itr->second->EIT_present_following_flag == 1 ){
+				if( CheckSectionAll(&itr->second->sectionPF, 0, &errPos, &errData) == FALSE ){
+					pfFlag = FALSE;
+//					_OutputDebugString(L"unacquired p/f section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
+				}
+			}
+
+			//EIT(スケジュール)
+			if( itr->second->EIT_schedule_flag == 1 && this->ONID != 1 && this->ONID != 3 ){
+				//BasicはEIT_schedule_flagフラグが1のもの全て対象
+				if( basicFlag == TRUE ){
+					if( CheckSectionAll(&itr->second->sectionBasic, now, &errPos, &errData) == FALSE ){
+						basicFlag = FALSE;
+//						_OutputDebugString(L"unacquired basic section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
+					}
+				}
+
+				//Extは取得状態が不完全なものだけNG
+				if( extFlag == TRUE && itr->second->sectionExt.last_section_number != (WORD)~0 ){
+					if( CheckSectionAll(&itr->second->sectionExt, now, &errPos, &errData) == FALSE ){
+						extFlag = FALSE;
+//						_OutputDebugString(L"unacquired ext section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
 					}
 				}
 			}
+		//他ストリーム
 		}else{
-			//他ストリーム
-			if( otherInfoPf == TRUE ){
-				//p/f EIT_present_following_flagに従う
-				if( itr->second->EIT_present_following_flag == 1 ){
-					if( CheckSectionAll(&itr->second->sectionPF, 0, 0, otherPfGetCount, otherPfTotalCount) == FALSE ){
-						otherPfFlag = FALSE;
+			//EIT(p/f) EIT_present_following_flagに従う
+			if( otherPfFlag == TRUE && itr->second->EIT_present_following_flag == 1 ){
+				if( CheckSectionAll(&itr->second->sectionPF, 0, &errPos, &errData) == FALSE ){
+					otherPfFlag = FALSE;
+//					_OutputDebugString(L"unacquired p/f(o) section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
+				}
+			}
+
+			//EIT(スケジュール)
+			if( itr->second->EIT_schedule_flag == 1 && this->ONID != 1 && this->ONID != 3 ){
+				//BasicはEIT_schedule_flagフラグが1のもの全て対象
+				if( otherBasicFlag == TRUE ){
+					if( CheckSectionAll(&itr->second->sectionBasic, now, &errPos, &errData) == FALSE ){
+						otherBasicFlag = FALSE;
+//						_OutputDebugString(L"unacquired basic(o) section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
+					}
+				}
+
+				//Extは取得状態が不完全なものだけNG
+				if( otherExtFlag == TRUE && itr->second->sectionExt.last_section_number != (WORD)~0 ){
+					if( CheckSectionAll(&itr->second->sectionExt, now, &errPos, &errData) == FALSE ){
+						otherExtFlag = FALSE;
+//						_OutputDebugString(L"unacquired ext(o) section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
 					}
 				}
 			}
 		}
 
-		if( this->ONID == 1 ){
-			//PerfecTVサービス 全て自ストリーム基本情報／拡張情報として扱う
-			if( itr->second->EIT_schedule_flag == 1 ){
-				if( infoBasic == TRUE ){
-					//基本情報
-					if( this->TSID == 0x0017 ){
-						//プロモch
-						if( CheckSectionDay(&itr->second->sectionBasic, tdtTime, (7*64)+8, basicGetCount, basicTotalCount) == FALSE ){
-							basicFlag = FALSE;
-						}
-					}else{
-						//プロモCHストリーム以外では基本情報6H分のみ
-						if( CheckSectionDay(&itr->second->sectionBasic, tdtTime, 16+8, basicGetCount, basicTotalCount) == FALSE ){
-							basicFlag = FALSE;
-						}
+		//PerfecTVサービスのEIT(スケジュール)
+		//テーブル番号下3bitが固定で日付に対応する
+		//    0: 1日～4日
+		//    1: 5日～8日
+		//    2: 9日～12日
+		//    3: 13日～16日
+		//    4: 17日～20日
+		//    5: 21日～24日
+		//    6: 25日～28日
+		//    7: 26日～31日
+		if( itr->second->EIT_schedule_flag == 1 && this->ONID == 1 ){
+			if( this->TSID == 0x0017 ){
+				//基本情報は7日分、拡張情報は3日分提供され、情報の追加は3時間単位で行われる…ような気がする
+				//Basic
+				if( basicFlag == TRUE ){
+					if( CheckSectionDay(&itr->second->sectionBasic, tdtTime, (7*64)+8, &errPos, &errData) == FALSE ){
+						basicFlag = otherBasicFlag = FALSE;
+//						_OutputDebugString(L"unacquired basic(nid=1) section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
 					}
 				}
 
-				if( infoExt == TRUE ){
-					//拡張情報
-					if( this->TSID == 0x0017 ){
-						//プロモch
-						if( CheckSectionDay(&itr->second->sectionExt, tdtTime, (3*64)+8, extGetCount, extTotalCount) == FALSE ){
-							extFlag = FALSE;
-						}
-					}else{
-						//プロモchのストリーム以外では拡張情報なし
+				//Ext
+				if( extFlag == TRUE ){
+					if( CheckSectionDay(&itr->second->sectionExt, tdtTime, (3*64)+8, &errPos, &errData) == FALSE ){
+						extFlag = otherExtFlag = FALSE;
+//						_OutputDebugString(L"unacquired ext(nid=1) section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
+					}
+				}
+			}else{
+				//プロモCH以外のストリームでは基本情報6H分のみ
+				//Basic
+				if( basicFlag == TRUE ){
+					if( CheckSectionDay(&itr->second->sectionBasic, tdtTime, 16+8, &errPos, &errData) == FALSE ){
+						basicFlag = otherBasicFlag = FALSE;
+//						_OutputDebugString(L"unacquired tiny(nid=1) section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
 					}
 				}
 			}
-		}else if( this->ONID == 3 ){
-			//SKYサービス 全て自ストリーム基本情報として扱う
+		}
+
+		//SKYサービス
+		if( this->ONID == 3 ){
+			//A2/A3
 			if( itr->second->EIT_present_following_flag == 1 ){
-				if( CheckSectionAll(&itr->second->sectionBasic, 0, 0, basicGetCount, basicTotalCount) == FALSE ){
+				if( CheckSectionAll(&itr->second->sectionBasic, 0, &errPos, &errData) == FALSE ){
 					basicFlag = extFlag = otherBasicFlag = otherExtFlag = FALSE;
-				}
-			}
-		}else{
-			//地デジ・BS・CS・SPHD 自ストリーム基本情報／拡張情報、他ストリーム基本情報／拡張情報を個別に扱う
-			if( itr->second->EIT_schedule_flag == 1 ){
-				if( itr->second->otherStreamFlag == 0 ){
-					//自ストリーム
-					if( infoBasic == TRUE ){
-						//基本情報
-						if( CheckSectionAll(&itr->second->sectionBasic, now, epgSections, basicGetCount, basicTotalCount) == FALSE ){
-							basicFlag = FALSE;
-						}
-					}
-
-					if( infoExt == TRUE ){
-						//拡張情報
-						if( itr->second->sectionExt.last_section_number != (WORD)~0 ){
-							if( CheckSectionAll(&itr->second->sectionExt, now, epgSections, extGetCount, extTotalCount) == FALSE ){
-								extFlag = FALSE;
-							}
-						}
-					}
-				}else{
-					//他ストリーム
-					if( otherInfoBasic == TRUE ){
-						//基本情報
-						if( CheckSectionAll(&itr->second->sectionBasic, now, epgSections, otherBasicGetCount, otherBasicTotalCount) == FALSE ){
-							otherBasicFlag = FALSE;
-						}
-					}
-
-					if( otherInfoExt == TRUE ){
-						//拡張情報
-						if( itr->second->sectionExt.last_section_number != (WORD)~0 ){
-							if( CheckSectionAll(&itr->second->sectionExt, now, epgSections, otherExtGetCount, otherExtTotalCount) == FALSE ){
-								otherExtFlag = FALSE;
-							}
-						}
-					}
+//					_OutputDebugString(L"unacquired a2 section 0x%016I64X[%d], %d (0x%016I64X)\r\n", itr->first, (int)(errPos/64), (int)(errPos%64), errData);
+					break;
 				}
 			}
 		}
 
-#ifndef _DEBUG
 		if ( pfFlag == FALSE && basicFlag == FALSE && extFlag == FALSE && otherPfFlag == FALSE && otherBasicFlag == FALSE && otherExtFlag == FALSE ){
 			break;
 		}
 	}
-#endif
-
-#ifdef _DEBUG
-	_OutputDebugString(L"Audio:%d Data:%d Other:%d Temporary:%d\r\n", serviceAudio, serviceData, serviceOther, serviceTemporary);
-	_OutputDebugString(L"Short:%d\r\n", lengthShort);
-	_OutputDebugString(L"p/f:%d basic:%d ext:%d\r\n", infoPf, infoBasic, infoExt);
-	_OutputDebugString(L"o-p/f:%d o-basic:%d o-ext:%d\r\n", otherInfoPf, otherInfoBasic, otherInfoExt);
-
-	_OutputDebugString(L"p/f\r\n");
-	_DebugSectinInfo(0, 7, pfGetCount, pfTotalCount);
-	if( this->ONID == 1 ){
-		_OutputDebugString(L"basic\r\n");
-		_DebugSectinInfoDay(tdtTime, 8, basicGetCount, basicTotalCount);
-		_OutputDebugString(L"ext\r\n");
-		_DebugSectinInfoDay(tdtTime, 8, extGetCount, extTotalCount);
-	}else if( this->ONID == 3 ){
-		_OutputDebugString(L"basic & ext\r\n");
-		_DebugSectinInfo(0, 8, basicGetCount, basicTotalCount);
-	}else{
-		_OutputDebugString(L"basic\r\n");
-		_DebugSectinInfo(0, 7, basicGetCount, basicTotalCount);
-		_OutputDebugString(L"ext\r\n");
-		_DebugSectinInfo(0, 7, extGetCount, extTotalCount);
-	}
-	_OutputDebugString(L"o-p/f\r\n");
-	_DebugSectinInfo(0, 7, otherPfGetCount, otherPfTotalCount);
-	if( this->ONID == 1 ){
-		_OutputDebugString(L"o-basic\r\n");
-		_DebugSectinInfoDay(tdtTime, 8, otherBasicGetCount, otherBasicTotalCount);
-		_OutputDebugString(L"o-ext\r\n");
-		_DebugSectinInfoDay(tdtTime, 8, otherExtGetCount, otherExtTotalCount);
-	}else if( this->ONID == 3 ){
-		_OutputDebugString(L"o-basic & o-ext\r\n");
-		_DebugSectinInfo(0, 8, otherBasicGetCount, otherBasicTotalCount);
-	}else{
-		_OutputDebugString(L"o-basic\r\n");
-		_DebugSectinInfo(0, 7, otherBasicGetCount, otherBasicTotalCount);
-		_OutputDebugString(L"o-ext\r\n");
-		_DebugSectinInfo(0, 7, otherExtGetCount, otherExtTotalCount);
-	}
-#endif
 
 	if( l_eitFlag == TRUE ){
 		if( pfFlag == TRUE ){
-			OutputDebugString(L"EpgLEITAll\r\n");
+//			OutputDebugString(L"EpgLEITAll\r\n");
 			status = EpgLEITAll;
 		}else{
-			OutputDebugString(L"EpgNeedData\r\n");
+//			OutputDebugString(L"EpgNeedData\r\n");
 			status = EpgNeedData;
 		}
 	}else{
 		if( pfFlag == TRUE && basicFlag == TRUE && extFlag == TRUE 
 				&& otherPfFlag == TRUE && otherBasicFlag == TRUE && otherExtFlag == TRUE ){
-			OutputDebugString(L"EpgHEITAll\r\n");
+//			OutputDebugString(L"EpgHEITAll\r\n");
 			status = EpgHEITAll;
 		}else if( basicFlag == TRUE && otherBasicFlag == TRUE ){
-			OutputDebugString(L"EpgBasicAll\r\n");
+//			OutputDebugString(L"EpgBasicAll\r\n");
 			status = EpgBasicAll;
 		//}else if( extFlag == TRUE && otherExtFlag == TRUE ){
 //			OutputDebugString(L"EpgExtendAll\r\n");
 		//	status = EpgExtendAll;
 		}else{
-			OutputDebugString(L"EpgNeedData\r\n");
+//			OutputDebugString(L"EpgNeedData\r\n");
 			status = EpgNeedData;
 		}
 	}
@@ -1533,16 +1416,9 @@ BOOL CEpgDBUtil::AddServiceList(CNITTable* nit)
 		DWORD key = ((DWORD)tsInfo->original_network_id) <<16 | tsInfo->transport_stream_id;
 		map<DWORD, DB_TS_INFO*>::iterator itrFind;
 		itrFind = this->serviceInfoList.find(key);
-		DB_TS_INFO* info;
-		if( itrFind == this->serviceInfoList.end() ){
-			info = new DB_TS_INFO;
-			info->original_network_id = tsInfo->original_network_id;
-			info->transport_stream_id = tsInfo->transport_stream_id;
-			this->serviceInfoList.insert(pair<DWORD, DB_TS_INFO*>(key, info));
-		}else{
-			info = itrFind->second;
+		if( itrFind != this->serviceInfoList.end() ){
+			itrFind->second->network_name = network_nameW;
 		}
-		info->network_name = network_nameW;
 
 		for( size_t j=0; j<tsInfo->descriptorList.size(); j++ ){
 			DESCRIPTOR_DATA* desc = tsInfo->descriptorList[j];
@@ -1557,33 +1433,24 @@ BOOL CEpgDBUtil::AddServiceList(CNITTable* nit)
 					}
 				}
 			}
-			if( desc->TSInfo != NULL ){
+			if( desc->TSInfo != NULL && itrFind != this->serviceInfoList.end()){
 				//ts_nameとremote_control_key_id
 				if( desc->TSInfo->length_of_ts_name > 0 ){
 					CARIB8CharDecode arib;
 					string ts_name = "";
 					arib.PSISI((const BYTE*)desc->TSInfo->ts_name_char, desc->TSInfo->length_of_ts_name, &ts_name);
-					AtoW(ts_name, info->ts_name);
+					AtoW(ts_name, itrFind->second->ts_name);
 				}
-				info->remote_control_key_id = desc->TSInfo->remote_control_key_id;
+				itrFind->second->remote_control_key_id = desc->TSInfo->remote_control_key_id;
 			}
-			if( desc->partialReception != NULL ){
+			if( desc->partialReception != NULL && itrFind != this->serviceInfoList.end()){
 				//部分受信フラグ
 				map<WORD,DB_SERVICE_INFO*>::iterator itrService;
 				for( size_t k=0; k<desc->partialReception->service_idList.size(); k++ ){
-					itrService = info->serviceList.find(desc->partialReception->service_idList[k]);
-
-					DB_SERVICE_INFO* item;
-					if( itrService == info->serviceList.end() ){
-						item = new DB_SERVICE_INFO;
-						item->original_network_id = tsInfo->original_network_id;
-						item->transport_stream_id = tsInfo->transport_stream_id;
-						item->service_id = desc->partialReception->service_idList[k];
-						info->serviceList.insert(pair<WORD,DB_SERVICE_INFO*>(item->service_id, item));
-					}else{
-						item = itrService->second;
+					itrService = itrFind->second->serviceList.find(desc->partialReception->service_idList[k]);
+					if( itrService != itrFind->second->serviceList.end() ){
+						itrService->second->partialReceptionFlag = 1;
 					}
-					item->partialReceptionFlag = 1;
 				}
 			}
 		}
@@ -1611,45 +1478,40 @@ BOOL CEpgDBUtil::AddServiceList(WORD TSID, CSITTable* sit)
 	DWORD key = ((DWORD)ONID)<<16 | TSID;
 	map<DWORD, DB_TS_INFO*>::iterator itrTS;
 	itrTS = this->serviceInfoList.find(key);
-	DB_TS_INFO* info;
 	if( itrTS == this->serviceInfoList.end() ){
-		info = new DB_TS_INFO;
+		DB_TS_INFO* info = new DB_TS_INFO;
 		info->original_network_id = ONID;
 		info->transport_stream_id = TSID;
-		this->serviceInfoList.insert(pair<DWORD, DB_TS_INFO*>(key, info));
-	}else{
-		info = itrTS->second;
-	}
 
-	for(size_t i=0; i<sit->serviceLoopList.size(); i++ ){
-		DB_SERVICE_INFO* item = new DB_SERVICE_INFO;
-		item->original_network_id = ONID;
-		item->transport_stream_id = TSID;
-		item->service_id = sit->serviceLoopList[i]->service_id;
+		for(size_t i=0; i<sit->serviceLoopList.size(); i++ ){
+			DB_SERVICE_INFO* item = new DB_SERVICE_INFO;
+			item->original_network_id = ONID;
+			item->transport_stream_id = TSID;
+			item->service_id = sit->serviceLoopList[i]->service_id;
 
-		for( size_t j=0; j<sit->serviceLoopList[i]->descriptorList.size(); j++ ){
-			if( sit->serviceLoopList[i]->descriptorList[j]->service != NULL ){
-				CServiceDesc* service = sit->serviceLoopList[i]->descriptorList[j]->service;
-				CARIB8CharDecode arib;
-				string service_provider_name = "";
-				string service_name = "";
-				if( service->service_provider_name_length > 0 ){
-					arib.PSISI((const BYTE*)service->char_service_provider_name, service->service_provider_name_length, &service_provider_name);
+			for( size_t j=0; j<sit->serviceLoopList[i]->descriptorList.size(); j++ ){
+				if( sit->serviceLoopList[i]->descriptorList[j]->service != NULL ){
+					CServiceDesc* service = sit->serviceLoopList[i]->descriptorList[j]->service;
+					CARIB8CharDecode arib;
+					string service_provider_name = "";
+					string service_name = "";
+					if( service->service_provider_name_length > 0 ){
+						arib.PSISI((const BYTE*)service->char_service_provider_name, service->service_provider_name_length, &service_provider_name);
+					}
+					if( service->service_name_length > 0 ){
+						arib.PSISI((const BYTE*)service->char_service_name, service->service_name_length, &service_name);
+					}
+					AtoW(service_provider_name, item->service_provider_name);
+					AtoW(service_name, item->service_name);
+
+					item->service_type = service->service_type;
 				}
-				if( service->service_name_length > 0 ){
-					arib.PSISI((const BYTE*)service->char_service_name, service->service_name_length, &service_name);
-				}
-				AtoW(service_provider_name, item->service_provider_name);
-				AtoW(service_name, item->service_name);
-
-				item->service_type = service->service_type;
 			}
+			info->serviceList.insert(pair<WORD,DB_SERVICE_INFO*>(item->service_id, item));
 		}
-		if( info->serviceList[item->service_id] != NULL ){
-			SAFE_DELETE(info->serviceList[item->service_id]);
-		}
-		info->serviceList[item->service_id] = item;
+		this->serviceInfoList.insert(pair<DWORD, DB_TS_INFO*>(key, info));
 	}
+
 
 	UnLock();
 	return TRUE;
@@ -1662,49 +1524,70 @@ BOOL CEpgDBUtil::AddSDT(CSDTTable* sdt)
 	DWORD key = ((DWORD)sdt->original_network_id)<<16 | sdt->transport_stream_id;
 	map<DWORD, DB_TS_INFO*>::iterator itrTS;
 	itrTS = this->serviceInfoList.find(key);
-	DB_TS_INFO* info;
 	if( itrTS == this->serviceInfoList.end() ){
-		info = new DB_TS_INFO;
+		DB_TS_INFO* info = new DB_TS_INFO;
 		info->original_network_id = sdt->original_network_id;
 		info->transport_stream_id = sdt->transport_stream_id;
-		this->serviceInfoList.insert(pair<DWORD, DB_TS_INFO*>(key, info));
-	}else{
-		info = itrTS->second;
-	}
 
-	for(size_t i=0; i<sdt->serviceInfoList.size(); i++ ){
-		map<WORD,DB_SERVICE_INFO*>::iterator itrS;
-		itrS = info->serviceList.find(sdt->serviceInfoList[i]->service_id);
-		DB_SERVICE_INFO* item;
-		if( itrS == info->serviceList.end()){
-			item = new DB_SERVICE_INFO;
+		for(size_t i=0; i<sdt->serviceInfoList.size(); i++ ){
+			DB_SERVICE_INFO* item = new DB_SERVICE_INFO;
 			item->original_network_id = sdt->original_network_id;
 			item->transport_stream_id = sdt->transport_stream_id;
 			item->service_id = sdt->serviceInfoList[i]->service_id;
-			info->serviceList.insert(pair<WORD,DB_SERVICE_INFO*>(item->service_id, item));
-		}else{
-			item = itrS->second;
-		}
 
-		for( size_t j=0; j<sdt->serviceInfoList[i]->descriptorList.size(); j++ ){
-			if( sdt->serviceInfoList[i]->descriptorList[j]->service != NULL ){
-				CServiceDesc* service = sdt->serviceInfoList[i]->descriptorList[j]->service;
-				CARIB8CharDecode arib;
-				string service_provider_name = "";
-				string service_name = "";
-				if( service->service_provider_name_length > 0 ){
-					arib.PSISI((const BYTE*)service->char_service_provider_name, service->service_provider_name_length, &service_provider_name);
+			for( size_t j=0; j<sdt->serviceInfoList[i]->descriptorList.size(); j++ ){
+				if( sdt->serviceInfoList[i]->descriptorList[j]->service != NULL ){
+					CServiceDesc* service = sdt->serviceInfoList[i]->descriptorList[j]->service;
+					CARIB8CharDecode arib;
+					string service_provider_name = "";
+					string service_name = "";
+					if( service->service_provider_name_length > 0 ){
+						arib.PSISI((const BYTE*)service->char_service_provider_name, service->service_provider_name_length, &service_provider_name);
+					}
+					if( service->service_name_length > 0 ){
+						arib.PSISI((const BYTE*)service->char_service_name, service->service_name_length, &service_name);
+					}
 					AtoW(service_provider_name, item->service_provider_name);
-				}
-				if( service->service_name_length > 0 ){
-					arib.PSISI((const BYTE*)service->char_service_name, service->service_name_length, &service_name);
 					AtoW(service_name, item->service_name);
+
+					item->service_type = service->service_type;
 				}
-				item->service_type = service->service_type;
+			}
+			info->serviceList.insert(pair<WORD,DB_SERVICE_INFO*>(item->service_id, item));
+		}
+		this->serviceInfoList.insert(pair<DWORD, DB_TS_INFO*>(key, info));
+	}else{
+		for(size_t i=0; i<sdt->serviceInfoList.size(); i++ ){
+			map<WORD,DB_SERVICE_INFO*>::iterator itrS;
+			itrS = itrTS->second->serviceList.find(sdt->serviceInfoList[i]->service_id);
+			if( itrS == itrTS->second->serviceList.end()){
+				DB_SERVICE_INFO* item = new DB_SERVICE_INFO;
+				item->original_network_id = sdt->original_network_id;
+				item->transport_stream_id = sdt->transport_stream_id;
+				item->service_id = sdt->serviceInfoList[i]->service_id;
+
+				for( size_t j=0; j<sdt->serviceInfoList[i]->descriptorList.size(); j++ ){
+					if( sdt->serviceInfoList[i]->descriptorList[j]->service != NULL ){
+						CServiceDesc* service = sdt->serviceInfoList[i]->descriptorList[j]->service;
+						CARIB8CharDecode arib;
+						string service_provider_name = "";
+						string service_name = "";
+						if( service->service_provider_name_length > 0 ){
+							arib.PSISI((const BYTE*)service->char_service_provider_name, service->service_provider_name_length, &service_provider_name);
+						}
+						if( service->service_name_length > 0 ){
+							arib.PSISI((const BYTE*)service->char_service_name, service->service_name_length, &service_name);
+						}
+						AtoW(service_provider_name, item->service_provider_name);
+						AtoW(service_name, item->service_name);
+
+						item->service_type = service->service_type;
+					}
+				}
+				itrTS->second->serviceList.insert(pair<WORD,DB_SERVICE_INFO*>(item->service_id, item));
 			}
 		}
 	}
-
 	if( sdt->table_id == 0x42 ){
 		if( this->ONID != sdt->original_network_id ){
 			this->ONID = sdt->original_network_id;
@@ -2399,7 +2282,7 @@ BOOL CEpgDBUtil::AddEIT_SD2(WORD PID, CEITTable_SD2* eit)
 	itrSec2 = this->sectionMapSD.find(key);
 	if( itrSec2 != this->sectionMapSD.end() ){
 		sectionInfo2 = itrSec2->second;
-		if( CheckSectionAll(&sectionInfo2->sectionBasic, 0, 0, NULL, NULL) == TRUE && CheckSectionAll(&sectionInfo2->sectionExt, 0, 0, NULL, NULL) == TRUE ){
+		if( CheckSectionAll(&sectionInfo2->sectionBasic, 0, NULL,NULL) == TRUE && CheckSectionAll(&sectionInfo2->sectionExt, 0, NULL,NULL) == TRUE ){
 			existInfo = TRUE;
 		}
 	}
@@ -2511,11 +2394,7 @@ void CEpgDBUtil::ClearEvent()
 		SAFE_DELETE(itr->second);
 	}
 	this->serviceEventMap.clear();
-	ClearSectionMap();
-}
 
-void CEpgDBUtil::ClearSectionMap()
-{
 	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itrSec;
 	for( itrSec = this->sectionMap.begin(); itrSec != this->sectionMap.end(); itrSec++ ){
 		SAFE_DELETE(itrSec->second);
@@ -2537,3 +2416,4 @@ void CEpgDBUtil::ClearEventSD()
 	}
 	this->sectionMapSD.clear();
 }
+
