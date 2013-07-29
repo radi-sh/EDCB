@@ -1303,7 +1303,7 @@ EPG_SECTION_STATUS CEpgDBUtil::GetSectionStatus(BOOL l_eitFlag)
 
 	WORD epgSections = 0;
 	if( lengthShort == TRUE ){
-		epgSections = 128;
+		epgSections = 120;
 	}
 
 	map<ULONGLONG, SECTION_STATUS_INFO*>::iterator itr;

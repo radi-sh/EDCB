@@ -132,36 +132,43 @@
                         <ComboBoxItem Content="無効" />
                         <ComboBoxItem Content="基本" />
                         <ComboBoxItem Content="詳細" />
+                        <ComboBoxItem Content="2日分" />
                     </ComboBox>
                     <ComboBox Height="21" HorizontalAlignment="Left" Margin="348,311,0,0" Name="cmb_Monday" SelectedIndex="2" ToolTip="EPGデータ取得種別を指定します。" VerticalAlignment="Top" Width="55">
                         <ComboBoxItem Content="無効" />
                         <ComboBoxItem Content="基本" />
                         <ComboBoxItem Content="詳細" />
+                        <ComboBoxItem Content="2日分" />
                     </ComboBox>
                     <ComboBox Height="21" HorizontalAlignment="Left" Margin="409,311,0,0" Name="cmb_Tuesday" SelectedIndex="2" ToolTip="EPGデータ取得種別を指定します。" VerticalAlignment="Top" Width="55">
                         <ComboBoxItem Content="無効" />
                         <ComboBoxItem Content="基本" />
                         <ComboBoxItem Content="詳細" />
+                        <ComboBoxItem Content="2日分" />
                     </ComboBox>
                     <ComboBox Height="21" HorizontalAlignment="Left" Margin="470,311,0,0" Name="cmb_Wednesday" SelectedIndex="2" ToolTip="EPGデータ取得種別を指定します。" VerticalAlignment="Top" Width="55">
                         <ComboBoxItem Content="無効" />
                         <ComboBoxItem Content="基本" />
                         <ComboBoxItem Content="詳細" />
+                        <ComboBoxItem Content="2日分" />
                     </ComboBox>
                     <ComboBox Height="21" HorizontalAlignment="Left" Margin="531,311,0,0" Name="cmb_Thursday" SelectedIndex="2" ToolTip="EPGデータ取得種別を指定します。" VerticalAlignment="Top" Width="55">
                         <ComboBoxItem Content="無効" />
                         <ComboBoxItem Content="基本" />
                         <ComboBoxItem Content="詳細" />
+                        <ComboBoxItem Content="2日分" />
                     </ComboBox>
                     <ComboBox Height="21" HorizontalAlignment="Left" Margin="592,311,0,0" Name="cmb_Friday" SelectedIndex="2" ToolTip="EPGデータ取得種別を指定します。" VerticalAlignment="Top" Width="55">
                         <ComboBoxItem Content="無効" />
                         <ComboBoxItem Content="基本" />
                         <ComboBoxItem Content="詳細" />
+                        <ComboBoxItem Content="2日分" />
                     </ComboBox>
                     <ComboBox Height="21" HorizontalAlignment="Left" Margin="653,311,0,0" Name="cmb_Saturday" SelectedIndex="2" ToolTip="EPGデータ取得種別を指定します。" VerticalAlignment="Top" Width="55">
                         <ComboBoxItem Content="無効" />
                         <ComboBoxItem Content="基本" />
                         <ComboBoxItem Content="詳細" />
+                        <ComboBoxItem Content="2日分" />
                     </ComboBox>
                 </Grid>
             </TabItem>

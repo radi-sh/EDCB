@@ -168,22 +168,26 @@ namespace EpgTimer.Setting
                 {
                     checkBox_bs.IsChecked = false;
                 }
-                if (IniFileHandler.GetPrivateProfileInt("SET", "CS1BasicOnly", 1, SettingPath.CommonIniPath) == 1)
-                {
-                    checkBox_cs1.IsChecked = true;
-                }
-                else
-                {
-                    checkBox_cs1.IsChecked = false;
-                }
-                if (IniFileHandler.GetPrivateProfileInt("SET", "CS2BasicOnly", 1, SettingPath.CommonIniPath) == 1)
-                {
-                    checkBox_cs2.IsChecked = true;
-                }
-                else
-                {
-                    checkBox_cs2.IsChecked = false;
-                }
+                //if (IniFileHandler.GetPrivateProfileInt("SET", "CS1BasicOnly", 1, SettingPath.CommonIniPath) == 1)
+                //{
+                //    checkBox_cs1.IsChecked = true;
+                //}
+                //else
+                //{
+                //    checkBox_cs1.IsChecked = false;
+                //}
+                checkBox_cs1.IsChecked = true;
+                checkBox_cs1.IsEnabled = false;
+                //if (IniFileHandler.GetPrivateProfileInt("SET", "CS2BasicOnly", 1, SettingPath.CommonIniPath) == 1)
+                //{
+                //    checkBox_cs2.IsChecked = true;
+                //}
+                //else
+                //{
+                //    checkBox_cs2.IsChecked = false;
+                //}
+                checkBox_cs2.IsChecked = true;
+                checkBox_cs2.IsEnabled = false;
                 if (IniFileHandler.GetPrivateProfileInt("SET", "EnableEPGTimerType", 0, SettingPath.CommonIniPath) == 1)
                 {
                     chkEnableEPGTimerType.IsChecked = true;
@@ -743,7 +747,7 @@ namespace EpgTimer.Setting
 
         private void button1_Click(object sender, RoutedEventArgs e)
         {
-            int swIdx = 2;
+            int swIdx = 3;
             if ((cmb_Sunday.SelectedIndex == cmb_Monday.SelectedIndex) &&
                 (cmb_Sunday.SelectedIndex == cmb_Tuesday.SelectedIndex) &&
                 (cmb_Sunday.SelectedIndex == cmb_Wednesday.SelectedIndex) &&
@@ -751,11 +755,11 @@ namespace EpgTimer.Setting
                 (cmb_Sunday.SelectedIndex == cmb_Friday.SelectedIndex) &&
                 (cmb_Sunday.SelectedIndex == cmb_Saturday.SelectedIndex))
             {
-                swIdx = ++cmb_Sunday.SelectedIndex % 3;
+                swIdx = ++cmb_Sunday.SelectedIndex % 4;
             }
             else
             {
-                swIdx = 2;
+                swIdx = 3;
             }
             cmb_Sunday.SelectedIndex = cmb_Monday.SelectedIndex = cmb_Tuesday.SelectedIndex = cmb_Wednesday.SelectedIndex = cmb_Thursday.SelectedIndex = cmb_Friday.SelectedIndex = cmb_Saturday.SelectedIndex = swIdx;
         }

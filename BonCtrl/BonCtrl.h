@@ -445,11 +445,13 @@ public:
 	// BSBasic		[IN]BSで１チャンネルから基本情報のみ取得するかどうか
 	// CS1Basic		[IN]CS1で１チャンネルから基本情報のみ取得するかどうか
 	// CS2Basic		[IN]CS2で１チャンネルから基本情報のみ取得するかどうか
+	// shortOnly	[IN]直近2日分の情報のみ取得するかどうか
 	DWORD StartEpgCap(
 		vector<EPGCAP_SERVICE_INFO>* chList,
 		BOOL BSBasic,
 		BOOL CS1Basic,
-		BOOL CS2Basic
+		BOOL CS2Basic,
+		BOOL shortOnly = FALSE
 		);
 
 	//EPG取得を停止する
@@ -533,6 +535,7 @@ protected:
 	BOOL BSBasic;
 	BOOL CS1Basic;
 	BOOL CS2Basic;
+	BOOL epgShort;
 	EPGCAP_SERVICE_INFO epgSt_ch;
 	DWORD epgSt_err;
 
@@ -570,7 +573,7 @@ protected:
 		BOOL chScan = FALSE
 		);
 
-	void GetEpgDataFilePath(WORD ONID, WORD TSID, wstring& epgDataFilePath);
+	void GetEpgDataFilePath(WORD ONID, WORD TSID, BOOL withOtherStream, BOOL onlyShort, wstring& epgDataFilePath);
 
 	static UINT WINAPI RecvThread(LPVOID param);
 	static UINT WINAPI AnalyzeThread(LPVOID param);

@@ -59,6 +59,10 @@ namespace EpgTimer
                     {
                         return "";
                     }
+                    else if (this.epgtype.Equals("3333333"))
+                    {
+                        return "2日分";
+                    }
                     else
                     {
                         return this.epgtype;

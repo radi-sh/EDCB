@@ -711,6 +711,7 @@ typedef struct _SET_CH_INFO{
 	DWORD space;
 	DWORD ch;
 	BOOL swBasic;
+	BOOL epgShort;
 	//=オペレーターの処理
 	_SET_CH_INFO & operator= (const _SET_CH_INFO & o) {
 		useSID = o.useSID;
@@ -721,6 +722,7 @@ typedef struct _SET_CH_INFO{
 		space = o.space;
 		ch = o.ch;
 		swBasic = o.swBasic;
+		epgShort = o.epgShort;
 		return *this;
 	};
 }SET_CH_INFO;

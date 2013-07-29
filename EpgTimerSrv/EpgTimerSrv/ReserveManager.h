@@ -400,9 +400,9 @@ protected:
 	BOOL IsFindNoSuspendExe();
 	BOOL IsFindShareTSFile();
 
-	BOOL GetNextEpgcapTime(LONGLONG* capTime, LONGLONG chkMargineMin,BOOL* swBasicOnly);
+	BOOL GetNextEpgcapTime(LONGLONG* capTime, LONGLONG chkMargineMin,BOOL* swBasicOnly, BOOL* swShortOnly = NULL);
 
-	BOOL _StartEpgCap();
+	BOOL _StartEpgCap(BOOL shortOnly = FALSE);
 	BOOL _IsEpgCap();
 
 	void _SendTweet(

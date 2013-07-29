@@ -3169,8 +3169,9 @@ UINT WINAPI CReserveManager::BankCheckThread(LPVOID param)
 		//EPG取得時間の確認
 		if( sys->Lock(L"BankCheckThread6") == TRUE){
 			BOOL swBasicOnly = false;
+			BOOL swShortOnly = false;
 			LONGLONG capTime = 0;
-			if( sys->GetNextEpgcapTime(&capTime, -1,&swBasicOnly) == TRUE ){
+			if( sys->GetNextEpgcapTime(&capTime, -1,&swBasicOnly, &swShortOnly) == TRUE ){
 				if( sys->useSrvCoop == TRUE &&sys->useEpgSrvCoop == TRUE){
 					if( (GetNowI64Time()+10*60*I64_1SEC) > capTime ){
 						//10分前になったらサーバー連携EPGチェックをやめる
@@ -3243,8 +3244,10 @@ UINT WINAPI CReserveManager::BankCheckThread(LPVOID param)
 							sys->CS1Only = false;
 							sys->CS2Only = false;
 						}
+						sys->_StartEpgCap(swShortOnly);
+					}else{
+						sys->_StartEpgCap(FALSE);
 					}
-					sys->_StartEpgCap();
 
 					// 振り分けが終わったのでもとに戻す
 					sys->BSOnly = Tmp_BSOnly;
@@ -4884,7 +4887,7 @@ BOOL CReserveManager::GetSleepReturnTime(
 	return TRUE;
 }
 
-BOOL CReserveManager::GetNextEpgcapTime(LONGLONG* capTime, LONGLONG chkMargineMin, BOOL* swBasicOnly)
+BOOL CReserveManager::GetNextEpgcapTime(LONGLONG* capTime, LONGLONG chkMargineMin, BOOL* swBasicOnly, BOOL* swShortOnly)
 {
 	if( capTime == NULL ){
 		return FALSE;
@@ -4949,10 +4952,19 @@ BOOL CReserveManager::GetNextEpgcapTime(LONGLONG* capTime, LONGLONG chkMargineMi
 		if( nowTime < itr->first ){
 			ret = TRUE;
 			*capTime = itr->first;
-			if(itr->second==1){
-				*swBasicOnly = true;
-			} else {
-				*swBasicOnly = false;
+			if(swBasicOnly != NULL){
+				if(itr->second == 1 || itr->second == 3){
+					*swBasicOnly = true;
+				} else {
+					*swBasicOnly = false;
+				}
+			}
+			if(swShortOnly != NULL){
+				if(itr->second == 3){
+					*swShortOnly = true;
+				} else {
+					*swShortOnly = false;
+				}
 			}
 			break;
 		}
@@ -5054,7 +5066,7 @@ BOOL CReserveManager::StartEpgCap()
 	return ret;
 }
 
-BOOL CReserveManager::_StartEpgCap()
+BOOL CReserveManager::_StartEpgCap(BOOL shortOnly)
 {
 	BOOL ret = TRUE;
 
@@ -5149,6 +5161,7 @@ BOOL CReserveManager::_StartEpgCap()
 					if((itrAdd->second.originalNetworkID == 4) && (this->BSOnly))	addItem.swBasic = TRUE;
 					if((itrAdd->second.originalNetworkID == 6) && (this->CS1Only))	addItem.swBasic = TRUE;
 					if((itrAdd->second.originalNetworkID == 7) && (this->CS2Only))	addItem.swBasic = TRUE;
+					addItem.epgShort = shortOnly;
 					itrCtrl->second->AddEpgCapItem(addItem);
 
 					add = TRUE;

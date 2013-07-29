@@ -30,6 +30,7 @@ CBonCtrl::CBonCtrl(void)
 	this->BSBasic = TRUE;
 	this->CS1Basic = TRUE;
 	this->CS2Basic = TRUE;
+	this->epgShort = FALSE;
 	this->epgSt_err = ST_STOP;
 
 	this->epgCapBackThread = NULL;
@@ -1400,11 +1401,13 @@ DWORD CBonCtrl::GetEpgCapService(
 // BSBasic		[IN]BSで１チャンネルから基本情報のみ取得するかどうか
 // CS1Basic		[IN]CS1で１チャンネルから基本情報のみ取得するかどうか
 // CS2Basic		[IN]CS2で１チャンネルから基本情報のみ取得するかどうか
+// shortOnly	[IN]直近2日分の情報のみ取得するかどうか
 DWORD CBonCtrl::StartEpgCap(
 	vector<EPGCAP_SERVICE_INFO>* chList,
 	BOOL BSBasic,
 	BOOL CS1Basic,
-	BOOL CS2Basic
+	BOOL CS2Basic,
+	BOOL shortOnly
 	)
 {
 	if( Lock(L"StartEpgCap") == FALSE ) return ERR_FALSE;
@@ -1433,6 +1436,7 @@ DWORD CBonCtrl::StartEpgCap(
 			this->BSBasic = BSBasic;
 			this->CS1Basic = CS1Basic;
 			this->CS2Basic = CS2Basic;
+			this->epgShort = shortOnly;
 			this->epgSt_err = ST_WORKING;
 			this->epgSt_ch.ONID = 0xFFFF;
 			this->epgSt_ch.TSID = 0xFFFF;
@@ -1512,6 +1516,9 @@ UINT WINAPI CBonCtrl::EpgCapThread(LPVOID param)
 	BOOL chkSPSD1 = FALSE;
 	BOOL chkSPSD2 = FALSE;
 	BOOL leitFlag = FALSE;
+	BOOL onlyBasic;
+	BOOL withOtherStream;
+	BOOL onlyShort;
 
 	EPGCAP_SERVICE_INFO chSPSD1 = { 0x0001, 0x0017, 0x00C8 };
 	EPGCAP_SERVICE_INFO chSPSD2 = { 0x0003, 0x110B, 0x40CA };
@@ -1539,42 +1546,154 @@ UINT WINAPI CBonCtrl::EpgCapThread(LPVOID param)
 				Sleep(200);
 				continue;
 			}
+			onlyBasic = FALSE;
+			withOtherStream = FALSE;
+			onlyShort = FALSE;
 			DWORD space = 0;
 			DWORD ch = 0;
-			// PerfecTVサービスならch200での取得を試みる
-			if( sys->epgCapChList[chkCount].ONID == 0x0001 && sys->chUtil.IsEpgCapService(chSPSD1.ONID, chSPSD1.TSID) == TRUE 
-					&& sys->chUtil.GetCh(chSPSD1.ONID, chSPSD1.TSID, space, ch) == TRUE ){
-				sys->_SetCh(space, ch);
-				epgCh = chSPSD1;
-				chkSPSD1 = TRUE;
-				wait = 10*1000;
-			// SKYサービスならch202での取得を試みる
-			}else if( sys->epgCapChList[chkCount].ONID == 0x0003 && sys->chUtil.IsEpgCapService(chSPSD2.ONID, chSPSD2.TSID) == TRUE 
-					&& sys->chUtil.GetCh(chSPSD2.ONID, chSPSD2.TSID, space, ch) == TRUE ){
-				sys->_SetCh(space, ch);
-				epgCh = chSPSD2;
-				chkSPSD2 = TRUE;
-				wait = 10*1000;
-			}else{
+			switch( sys->epgCapChList[chkCount].ONID ){
+			case 0x0001:
+				//PerfecTVサービスの場合、プロモchでの取得を試みる
+				if( sys->chUtil.IsEpgCapService(chSPSD1.ONID, chSPSD1.TSID) == TRUE && sys->chUtil.GetCh(chSPSD1.ONID, chSPSD1.TSID, space, ch) == TRUE ){
+					//プロモch（全ストリームの基本情報＋拡張情報）
+					epgCh = chSPSD1;
+					chkSPSD1 = TRUE;
+					onlyBasic = FALSE;			//拡張情報あり
+					withOtherStream = TRUE;		//他ストリーム含めて取得
+					onlyShort = FALSE;			//7日分
+				}else{
+					//プロモch以外（そのストリームの基本情報6H分）
+					sys->chUtil.GetCh(sys->epgCapChList[chkCount].ONID, sys->epgCapChList[chkCount].TSID, space, ch);
+					epgCh = sys->epgCapChList[chkCount];
+					onlyBasic = TRUE;			//拡張情報なし
+					withOtherStream = FALSE;	//自ストリームのみ取得
+					onlyShort = TRUE;			//6H分
+				}
+				break;
+			case 0x0003:
+				//SKYサービスの場合、プロモchでの取得を試みる
+				if( sys->chUtil.IsEpgCapService(chSPSD2.ONID, chSPSD2.TSID) == TRUE && sys->chUtil.GetCh(chSPSD2.ONID, chSPSD2.TSID, space, ch) == TRUE ){
+					//プロモch（全ストリームの基本情報＋拡張情報）
+					epgCh = chSPSD2;
+					chkSPSD2 = TRUE;
+					onlyBasic = FALSE;			//拡張情報あり
+					withOtherStream = TRUE;		//他ストリーム含めて取得
+					onlyShort = FALSE;			//7日分
+				}else{
+					//プロモch以外（たぶん失敗する）
+					sys->chUtil.GetCh(sys->epgCapChList[chkCount].ONID, sys->epgCapChList[chkCount].TSID, space, ch);
+					epgCh = sys->epgCapChList[chkCount];
+					onlyBasic = TRUE;			//拡張情報なし
+					withOtherStream = FALSE;	//自ストリームのみ取得
+					onlyShort = TRUE;			//6H分
+				}
+				break;
+			case 0x0004:
+				//BSの場合、全ストリームの基本情報と、そのストリーム（＋関連ストリーム）の拡張情報が取得できる
 				sys->chUtil.GetCh(sys->epgCapChList[chkCount].ONID, sys->epgCapChList[chkCount].TSID, space, ch);
-				sys->_SetCh(space, ch);
 				epgCh = sys->epgCapChList[chkCount];
-				wait = 60*1000;
+				if( sys->BSBasic == TRUE || sys->epgShort == TRUE ){
+					onlyBasic = TRUE;			//拡張情報なし
+				}else{
+					onlyBasic = FALSE;			//拡張情報あり
+				}
+				if( sys->BSBasic == TRUE ){
+					chkBS = TRUE;
+					withOtherStream = TRUE;		//他ストリーム含めて取得
+				}else{
+					withOtherStream = FALSE;	//自ストリームのみ取得
+				}
+				if( sys->epgShort == TRUE ){
+					onlyShort = TRUE;			//2日分
+				}else{
+					onlyShort = FALSE;			//7日分
+				}
+				break;
+			case 0x0006:
+				//CS1の場合、どのストリームでも全ストリームの基本情報が取得できる（拡張情報なし）
+				sys->chUtil.GetCh(sys->epgCapChList[chkCount].ONID, sys->epgCapChList[chkCount].TSID, space, ch);
+				epgCh = sys->epgCapChList[chkCount];
+				if( sys->CS1Basic == TRUE || sys->epgShort == TRUE ){
+					onlyBasic = TRUE;			//拡張情報なし
+				}else{
+					//そもそも拡張情報は流れていないので結果は同じだが
+					onlyBasic = FALSE;			//拡張情報あり
+				}
+				if( sys->CS1Basic == TRUE ){
+					chkCS1 = TRUE;
+					withOtherStream = TRUE;		//他ストリーム含めて取得
+				}else{
+					//withOtherStream = FALSE;	//自ストリームのみ取得
+					//どのストリームで拾っても同じなのでやめておく
+					chkCS1 = TRUE;
+					withOtherStream = TRUE;		//他ストリーム含めて取得
+				}
+				if( sys->epgShort == TRUE ){
+					onlyShort = TRUE;			//2日分
+				}else{
+					onlyShort = FALSE;			//7日分
+				}
+				break;
+			case 0x0007:
+				//CS2の場合、どのストリームでも全ストリームの基本情報が取得できる（拡張情報なし）
+				sys->chUtil.GetCh(sys->epgCapChList[chkCount].ONID, sys->epgCapChList[chkCount].TSID, space, ch);
+				epgCh = sys->epgCapChList[chkCount];
+				if( sys->CS2Basic == TRUE || sys->epgShort == TRUE ){
+					onlyBasic = TRUE;			//拡張情報なし
+				}else{
+					//そもそも拡張情報は流れていないので結果は同じだが
+					onlyBasic = FALSE;			//拡張情報あり
+				}
+				if( sys->CS2Basic == TRUE ){
+					chkCS2 = TRUE;
+					withOtherStream = TRUE;		//他ストリーム含めて取得
+				}else{
+					//withOtherStream = FALSE;	//自ストリームのみ取得
+					//どのストリームで拾っても同じなのでやめておく
+					chkCS2 = TRUE;
+					withOtherStream = TRUE;		//他ストリーム含めて取得
+				}
+				if( sys->epgShort == TRUE ){
+					onlyShort = TRUE;			//2日分
+				}else{
+					onlyShort = FALSE;			//7日分
+				}
+				break;
+			case 0x000A:
+				//SPHDの場合、どのストリームでも全ストリームの基本情報＋拡張情報が取得できる
+				sys->chUtil.GetCh(sys->epgCapChList[chkCount].ONID, sys->epgCapChList[chkCount].TSID, space, ch);
+				epgCh = sys->epgCapChList[chkCount];
+				chkSPHD = TRUE;
+				withOtherStream = TRUE;			//他ストリーム含めて取得
+				if( sys->epgShort == TRUE ){
+					onlyBasic = TRUE;			//拡張情報なし
+					onlyShort = TRUE;			//2日分
+				}else{
+					onlyBasic = FALSE;			//拡張情報あり
+					onlyShort = FALSE;			//7日分
+				}
+				break;
+			default:
+				//地デジ・その他
+				sys->chUtil.GetCh(sys->epgCapChList[chkCount].ONID, sys->epgCapChList[chkCount].TSID, space, ch);
+				epgCh = sys->epgCapChList[chkCount];
+				withOtherStream = FALSE;		//自ストリームのみ取得
+				if( sys->epgShort == TRUE ){
+					onlyBasic = TRUE;			//拡張情報なし
+					onlyShort = TRUE;			//2日分
+				}else{
+					onlyBasic = FALSE;			//拡張情報あり
+					onlyShort = FALSE;			//7日分
+				}
+				break;
 			}
+			sys->_SetCh(space, ch);
 			sys->epgSt_ch = epgCh;
 			leitFlag = sys->chUtil.IsPartial(epgCh.ONID, epgCh.SID, epgCh.SID);
 			startTime = GetTimeCount();
 			chkNext = FALSE;
 			startCap = FALSE;
-			if( epgCh.ONID == 4 ){
-				chkBS = TRUE;
-			}else if( epgCh.ONID == 6 ){
-				chkCS1 = TRUE;
-			}else if( epgCh.ONID == 7 ){
-				chkCS2 = TRUE;
-			}else if( epgCh.ONID == 10 ){
-				chkSPHD = TRUE;
-			}
+			wait = 10*1000;
 		}else{
 			BOOL chChgErr = FALSE;
 			if( sys->tsOut.IsChChanging(&chChgErr) == TRUE ){
@@ -1589,50 +1708,47 @@ UINT WINAPI CBonCtrl::EpgCapThread(LPVOID param)
 					chkNext = TRUE;
 					wait = 0;
 					_OutputDebugString(L"++%d分でEPG取得完了せず or Ch変更でエラー", timeOut);
-				}else if(startTime + chkWait < GetTimeCount() ){
-					//切り替えから15秒以上過ぎているので取得処理
+				}else{
+					//取得処理
 					if( startCap == FALSE ){
 						//取得開始
 						startCap = TRUE;
+						WORD epgGetSettings = EpgGetServiceVideo | EpgGetServiceAudio | EpgGetInfoBasic;
+						if( onlyBasic == FALSE ){
+							epgGetSettings |= EpgGetInfoExt;
+						}
+						if( onlyShort == TRUE ){
+							epgGetSettings |= EpgGetLengthShort;
+						}
+						if( withOtherStream == TRUE ){
+							epgGetSettings |= EpgGetOtherInfoBasic;
+							if( onlyBasic == FALSE ){
+								epgGetSettings |= EpgGetOtherInfoExt;
+							}
+						}
+						sys->tsOut.SetEpgGetSettings(epgGetSettings);
 						wstring epgDataPath = L"";
-						sys->GetEpgDataFilePath(epgCh.ONID, epgCh.TSID, epgDataPath);
+						sys->GetEpgDataFilePath(epgCh.ONID, epgCh.TSID, withOtherStream, onlyShort, epgDataPath);
 						sys->tsOut.StartSaveEPG(epgDataPath);
 						sys->tsOut.ClearSectionStatus();
 						wait = 5*1000;
 					}else{
 						//蓄積状態チェック
 						EPG_SECTION_STATUS status = sys->tsOut.GetSectionStatus(leitFlag);
-						if( epgCh.ONID == 4 && sys->BSBasic == TRUE ){
-							if( status == EpgHEITAll || status == EpgHEITAll  ){
-								chkNext = TRUE;
-							}
-						}else if( epgCh.ONID == 6 && sys->CS1Basic == TRUE ){
-							if( status == EpgBasicAll || status == EpgHEITAll ){
-								chkNext = TRUE;
-							}
-						}else if( epgCh.ONID == 7 && sys->CS2Basic == TRUE ){
-							if( status == EpgBasicAll || status == EpgHEITAll ){
-								chkNext = TRUE;
-							}
-						}else if( epgCh.ONID == 10 ){
-							if( status == EpgBasicAll || status == EpgHEITAll ){
-								chkNext = TRUE;
-							}
-						}else if( epgCh.ONID == 1 ){
-							if( status == EpgHEITAll ){
-								chkNext = TRUE;
-							}
-						}else if( epgCh.ONID == 3 ){
-							if( status == EpgHEITAll ){
-								chkNext = TRUE;
-							}
+						if( leitFlag == TRUE && status == EpgLEITAll ){
+							chkNext = TRUE;
 						}else{
-							if( leitFlag == FALSE && status == EpgHEITAll ){
-								chkNext = TRUE;
-							}else if( leitFlag == TRUE && status == EpgLEITAll ){
-								chkNext = TRUE;
+							if( onlyBasic == TRUE ){
+								if( status == EpgBasicAll || status == EpgHEITAll  ){
+									chkNext = TRUE;
+								}
+							}else{
+								if( status == EpgHEITAll ){
+									chkNext = TRUE;
+								}
 							}
 						}
+
 						if( chkNext == TRUE ){
 							sys->tsOut.StopSaveEPG(TRUE);
 							wait = 0;
@@ -1691,26 +1807,24 @@ UINT WINAPI CBonCtrl::EpgCapThread(LPVOID param)
 	return 0;
 }
 
-void CBonCtrl::GetEpgDataFilePath(WORD ONID, WORD TSID, wstring& epgDataFilePath)
+void CBonCtrl::GetEpgDataFilePath(WORD ONID, WORD TSID, BOOL withOtherStream, BOOL onlyShort, wstring& epgDataFilePath)
 {
 	wstring epgDataFolderPath = L"";
 	GetSettingPath(epgDataFolderPath);
 	epgDataFolderPath += EPG_SAVE_FOLDER;
 
-	if( ONID == 4 && this->BSBasic == TRUE ){
-		Format(epgDataFilePath, L"%s\\%04XFFFF_epg.dat", epgDataFolderPath.c_str(), ONID);
-	}else if( ONID == 6 && this->CS1Basic == TRUE ){
-		Format(epgDataFilePath, L"%s\\%04XFFFF_epg.dat", epgDataFolderPath.c_str(), ONID);
-	}else if( ONID == 7 && this->CS2Basic == TRUE ){
-		Format(epgDataFilePath, L"%s\\%04XFFFF_epg.dat", epgDataFolderPath.c_str(), ONID);
-	}else if( ONID == 10 ){
-		Format(epgDataFilePath, L"%s\\%04XFFFF_epg.dat", epgDataFolderPath.c_str(), ONID);
-	}else if( ONID == 1 && TSID == 0x0017 ){
-		Format(epgDataFilePath, L"%s\\%04XFFFF_epg.dat", epgDataFolderPath.c_str(), ONID);
-	}else if( ONID == 3 && TSID == 0x110B ){
-		Format(epgDataFilePath, L"%s\\%04XFFFF_epg.dat", epgDataFolderPath.c_str(), ONID);
+	if( onlyShort == TRUE ){
+		if( withOtherStream == TRUE ){
+			Format(epgDataFilePath, L"%s\\%04XFFFFShort_epg.dat", epgDataFolderPath.c_str(), ONID);
+		}else{
+			Format(epgDataFilePath, L"%s\\%04X%04XShort_epg.dat", epgDataFolderPath.c_str(), ONID, TSID);
+		}
 	}else{
-		Format(epgDataFilePath, L"%s\\%04X%04X_epg.dat", epgDataFolderPath.c_str(), ONID, TSID);
+		if( withOtherStream == TRUE ){
+			Format(epgDataFilePath, L"%s\\%04XFFFF_epg.dat", epgDataFolderPath.c_str(), ONID);
+		}else{
+			Format(epgDataFilePath, L"%s\\%04X%04X_epg.dat", epgDataFolderPath.c_str(), ONID, TSID);
+		}
 	}
 }
 
@@ -1857,11 +1971,26 @@ UINT WINAPI CBonCtrl::EpgCapBackThread(LPVOID param)
 		return 0;
 	}
 
-	sys->GetEpgDataFilePath(ONID, TSID, epgDataPath);
+	WORD epgGetSettings = EpgGetServiceVideo | EpgGetServiceAudio | EpgGetLengthLong;
+	BOOL withOtherStream;
+	if( ONID == 4 && sys->BSBasic == TRUE
+			|| ONID == 6 && sys->CS1Basic == TRUE
+			|| ONID == 7 && sys->CS2Basic == TRUE
+			|| ONID == 10
+			|| ONID == 1
+			|| ONID == 3 ){
+		epgGetSettings |= EpgGetInfoBasic | EpgGetOtherInfoBasic;
+		withOtherStream = TRUE;
+	}else{
+		epgGetSettings |= EpgGetInfoExt;
+		withOtherStream = FALSE;
+	}
+	sys->tsOut.SetEpgGetSettings(epgGetSettings);
+	sys->GetEpgDataFilePath(ONID, TSID, withOtherStream, FALSE, epgDataPath);
 	sys->tsOut.StartSaveEPG(epgDataPath);
 	sys->tsOut.ClearSectionStatus();
 
-	if( ::WaitForSingleObject(sys->epgCapBackStopEvent, 10*1000) != WAIT_TIMEOUT ){
+	if( ::WaitForSingleObject(sys->epgCapBackStopEvent, 5*1000) != WAIT_TIMEOUT ){
 		//キャンセルされた
 		sys->tsOut.StopSaveEPG(FALSE);
 		return 0;
