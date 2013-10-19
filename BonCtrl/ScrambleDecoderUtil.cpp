@@ -23,7 +23,7 @@ BOOL CScrambleDecoderUtil::LoadDll(LPCWSTR dllPath)
 	UnLoadDll();
 	BOOL ret = TRUE;
 
-	this->module = ::LoadLibrary(dllPath);
+	this->module = ::LoadLibraryEx(dllPath, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 	if( this->module == NULL ){
 		return FALSE;
 	}
@@ -126,6 +126,7 @@ BOOL CScrambleDecoderUtil::SetNetwork(WORD ONID, WORD TSID)
 			if( _wsplitpath_s(dllPath.c_str(), NULL, 0, buff, 512, NULL, 0, NULL, 0) == 0 ){
 				dllDir = buff;
 				SetCurrentDirectory(dllDir.c_str());
+				SetDllDirectory(dllDir.c_str());
 			}
 		}
 		if( LoadDll(dllPath.c_str()) == FALSE ){
