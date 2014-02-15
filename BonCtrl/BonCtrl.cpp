@@ -542,7 +542,7 @@ DWORD CBonCtrl::_OpenBonDriver()
 		//受信スレッド起動
 		ResetEvent(this->recvStopEvent);
 		this->recvThread = (HANDLE)_beginthreadex(NULL, 0, RecvThread, (LPVOID)this, CREATE_SUSPENDED, NULL);
-		SetThreadPriority( this->recvThread, THREAD_PRIORITY_NORMAL );
+		SetThreadPriority( this->recvThread, THREAD_PRIORITY_HIGHEST );
 		ResumeThread(this->recvThread);
 	}
 	if( this->analyzeThread == NULL ){
