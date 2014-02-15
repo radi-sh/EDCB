@@ -874,8 +874,7 @@ void CEpgDataCap_BonDlg::BtnUpdate(DWORD guiMode)
 			this->chkRecSet.SetCheck(FALSE);
 			this->btnCancel.EnableWindow(FALSE);
 			this->btnView.EnableWindow(TRUE);
-			this->chkUDP.EnableWindow(TRUE);
-			this->chkTCP.EnableWindow(TRUE);
+			ReloadNWSet();
 			this->btnTimeShift.EnableWindow(FALSE);
 			break;
 		case GUI_CANCEL_ONLY:
@@ -890,8 +889,7 @@ void CEpgDataCap_BonDlg::BtnUpdate(DWORD guiMode)
 			this->chkRecSet.EnableWindow(FALSE);
 			this->btnCancel.EnableWindow(TRUE);
 			this->btnView.EnableWindow(TRUE);
-			this->chkUDP.EnableWindow(TRUE);
-			this->chkTCP.EnableWindow(TRUE);
+			ReloadNWSet();
 			this->btnTimeShift.EnableWindow(FALSE);
 			break;
 		case GUI_OPEN_FAIL:
@@ -923,8 +921,7 @@ void CEpgDataCap_BonDlg::BtnUpdate(DWORD guiMode)
 			this->chkRecSet.SetCheck(FALSE);
 			this->btnCancel.EnableWindow(TRUE);
 			this->btnView.EnableWindow(TRUE);
-			this->chkUDP.EnableWindow(TRUE);
-			this->chkTCP.EnableWindow(TRUE);
+			ReloadNWSet();
 			this->btnTimeShift.EnableWindow(TRUE);
 			break;
 		case GUI_REC_SET_TIME:
@@ -939,8 +936,7 @@ void CEpgDataCap_BonDlg::BtnUpdate(DWORD guiMode)
 			this->chkRecSet.EnableWindow(TRUE);
 			this->btnCancel.EnableWindow(TRUE);
 			this->btnView.EnableWindow(TRUE);
-			this->chkUDP.EnableWindow(TRUE);
-			this->chkTCP.EnableWindow(TRUE);
+			ReloadNWSet();
 			this->btnTimeShift.EnableWindow(TRUE);
 			break;
 		case GUI_OTHER_CTRL:
@@ -955,8 +951,7 @@ void CEpgDataCap_BonDlg::BtnUpdate(DWORD guiMode)
 			this->chkRecSet.EnableWindow(FALSE);
 			this->btnCancel.EnableWindow(TRUE);
 			this->btnView.EnableWindow(TRUE);
-			this->chkUDP.EnableWindow(TRUE);
-			this->chkTCP.EnableWindow(TRUE);
+			ReloadNWSet();
 			this->btnTimeShift.EnableWindow(TRUE);
 			break;
 		case GUI_REC_STANDBY:
@@ -971,8 +966,7 @@ void CEpgDataCap_BonDlg::BtnUpdate(DWORD guiMode)
 			this->chkRecSet.EnableWindow(FALSE);
 			this->btnCancel.EnableWindow(FALSE);
 			this->btnView.EnableWindow(TRUE);
-			this->chkUDP.EnableWindow(TRUE);
-			this->chkTCP.EnableWindow(TRUE);
+			ReloadNWSet();
 			this->btnTimeShift.EnableWindow(FALSE);
 			break;
 		default:
