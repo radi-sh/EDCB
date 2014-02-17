@@ -488,6 +488,32 @@ BOOL CBonDriverUtil::GetTsStream(
 	return ret;
 }
 
+//TSストリームが取得可能になるまで待機
+//戻り値：
+// WAIT_OBJECT_0	ストリーム取得可能
+// WAIT_TIMEOUT		タイムアウト
+// WAIT_ABANDONED	チューナーが閉じられた
+// WAIT_FAILED		失敗
+//引数：
+// timeout			[IN]タイムアウト時間(msec)
+DWORD CBonDriverUtil::WaitTsStream(
+	DWORD timeout
+	)
+{
+	// Lock()しない
+	if (this->bonIF == NULL){
+		return WAIT_FAILED;
+	}
+	DWORD ret = WAIT_FAILED;
+	try{
+		ret = this->bonIF->WaitTsStream(timeout);
+	}
+	catch (...){
+		ret = WAIT_FAILED;
+	}
+	return ret;
+}
+
 //シグナルレベルの取得
 //戻り値：
 // シグナルレベル
@@ -498,7 +524,12 @@ float CBonDriverUtil::GetSignalLevel()
 		UnLock();
 		return 0;
 	}
-	float fLevel = this->bonIF->GetSignalLevel();
+	float fLevel;
+	try{
+		fLevel = this->bonIF->GetSignalLevel();
+	}catch(...){
+		fLevel = -1;
+	}
 	UnLock();
 	return fLevel;
 }

@@ -668,14 +668,31 @@ UINT WINAPI CBonCtrl::RecvThread(LPVOID param)
 						delete item;
 						_OutputDebugString(L"★★RecvThread Exception2");
 					}
+				}
+				if (remain != 0) {
+					// 未取得ストリーム有り
+					continue;
 				}else{
-					Sleep(10);
+					// ストリーム取得可能になるまで待機
+					DWORD result = sys->bonUtil.WaitTsStream(250);
+					switch(result) {
+					case WAIT_OBJECT_0:		// ストリーム取得可能
+					case WAIT_TIMEOUT:		// タイムアウト
+						continue;
+					default:
+						Sleep(100);
+						// 何か処理が必要かも
+					}
 				}
 			}else{
-				Sleep(10);
+				// 失敗
+				Sleep(100);
+				// 何か処理が必要かも
 			}
 		}catch(...){
 			_OutputDebugString(L"★★RecvThread Exception1");
+			Sleep(100);
+			// 何か処理が必要かも
 		}
 	}
 	return 0;

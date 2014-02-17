@@ -117,6 +117,18 @@ public:
 		DWORD *remain
 		);
 
+	//TSストリームが取得可能になるまで待機
+	//戻り値：
+	// WAIT_OBJECT_0	ストリーム取得可能
+	// WAIT_TIMEOUT		タイムアウト
+	// WAIT_ABANDONED	チューナーが閉じられた
+	// WAIT_FAILED		失敗
+	//引数：
+	// timeout			[IN]タイムアウト時間(msec)
+	DWORD WaitTsStream(
+		DWORD timeout
+		);
+
 	//シグナルレベルの取得
 	//戻り値：
 	// シグナルレベル
