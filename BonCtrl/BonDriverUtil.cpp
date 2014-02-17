@@ -413,8 +413,8 @@ DWORD CBonDriverUtil::SetCh(
 			return ERR_FALSE;
 		}
 	}
-	this->bon2IF->PurgeTsStream();
 	Sleep(100);
+	this->bon2IF->PurgeTsStream();
 	this->initChSetFlag = TRUE;
 	UnLock();
 	return NO_ERR;
