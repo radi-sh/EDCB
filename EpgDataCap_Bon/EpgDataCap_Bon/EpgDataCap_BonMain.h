@@ -290,6 +290,9 @@ protected:
 
 	int openWait;
 
+	int openRetryCount;
+	int openRetryWait;
+
 	wstring viewPath;
 	wstring viewOpt;
 

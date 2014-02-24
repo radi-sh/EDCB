@@ -39,6 +39,9 @@ CEpgDataCap_BonMain::CEpgDataCap_BonMain(void)
 	this->outCtrlID = -1;
 
 	this->openWait = 200;
+
+	this->openRetryCount = 0;
+	this->openRetryWait = 3000;
 }
 
 
@@ -132,6 +135,9 @@ void CEpgDataCap_BonMain::ReloadSetting()
 	this->bonCtrl.SetTsBuffMaxCount(tsBuffMaxCount, writeBuffMaxCount);
 
 	this->openWait = (DWORD)GetPrivateProfileInt( L"SET", L"OpenWait", 200, appIniPath.c_str() );
+
+	this->openRetryCount = (DWORD)GetPrivateProfileInt(L"SET", L"OpenRetryCount", 0, appIniPath.c_str());
+	this->openRetryWait = (DWORD)GetPrivateProfileInt(L"SET", L"OpenRetryWait", 3000, appIniPath.c_str());
 }
 
 //BonDriverƒtƒHƒ‹ƒ_‚ÌBonDriver_*.dll‚ğ—ñ‹“
@@ -155,22 +161,35 @@ DWORD CEpgDataCap_BonMain::OpenBonDriver(
 	LPCWSTR bonDriverFile
 )
 {
-	DWORD ret = this->bonCtrl.OpenBonDriver(bonDriverFile, this->openWait);
-	if( ret == NO_ERR ){
-		this->lastONID = 0xFFFF;
-		this->lastTSID = 0xFFFF;
-		this->lastSID = 0xFFFF;
-		this->currentBonDriver = bonDriverFile;
-		if( this->nwCtrlID == 0 ){
-			if( this->bonCtrl.CreateServiceCtrl(&this->nwCtrlID) == TRUE ){
-				this->bonCtrl.SetScramble(this->nwCtrlID, this->enableScrambleFlag);
-				this->bonCtrl.SetServiceMode(this->nwCtrlID, this->needCaption, this->needData);
+	DWORD ret;
+	for (int retry = this->openRetryCount; retry >= 0; retry--) {
+		ret = this->bonCtrl.OpenBonDriver(bonDriverFile, this->openWait);
+		if (ret == NO_ERR){
+			this->lastONID = 0xFFFF;
+			this->lastTSID = 0xFFFF;
+			this->lastSID = 0xFFFF;
+			this->currentBonDriver = bonDriverFile;
+			if (this->nwCtrlID == 0){
+				if (this->bonCtrl.CreateServiceCtrl(&this->nwCtrlID) == TRUE){
+					this->bonCtrl.SetScramble(this->nwCtrlID, this->enableScrambleFlag);
+					this->bonCtrl.SetServiceMode(this->nwCtrlID, this->needCaption, this->needData);
+				}
 			}
-		}else{
-			this->bonCtrl.ClearErrCount(this->nwCtrlID);
+			else{
+				this->bonCtrl.ClearErrCount(this->nwCtrlID);
+			}
+			break;
 		}
-	}else{
-		this->currentBonDriver = L"";
+		else{
+			this->currentBonDriver = L"";
+		}
+		OutputDebugString(L"šOpenBonDriver failed.\r\n");
+		if (retry > 0) {
+			_OutputDebugString(L"Waiting for retry %d sec.\r\n", this->openRetryWait);
+			for (int i = this->openRetryWait / 100; i > 0; i--) {
+				Sleep(100);
+			}
+		}
 	}
 	return ret;
 }
