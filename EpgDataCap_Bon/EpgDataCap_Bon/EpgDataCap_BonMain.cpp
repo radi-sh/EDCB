@@ -40,8 +40,8 @@ CEpgDataCap_BonMain::CEpgDataCap_BonMain(void)
 
 	this->openWait = 200;
 
-	this->openRetryCount = 10;
-	this->openRetryWait = 10000;
+	this->openRetryCount = 0;
+	this->openRetryWait = 3000;
 }
 
 
@@ -136,9 +136,8 @@ void CEpgDataCap_BonMain::ReloadSetting()
 
 	this->openWait = (DWORD)GetPrivateProfileInt( L"SET", L"OpenWait", 200, appIniPath.c_str() );
 
-	this->openRetryCount = (DWORD)GetPrivateProfileInt(L"SET", L"OpenRetryCount", 10, appIniPath.c_str());
-	this->openRetryWait = (DWORD)GetPrivateProfileInt(L"SET", L"OpenRetryWait", 10000, appIniPath.c_str());
-
+	this->openRetryCount = (DWORD)GetPrivateProfileInt(L"SET", L"OpenRetryCount", 0, appIniPath.c_str());
+	this->openRetryWait = (DWORD)GetPrivateProfileInt(L"SET", L"OpenRetryWait", 3000, appIniPath.c_str());
 }
 
 //BonDriverƒtƒHƒ‹ƒ_‚ÌBonDriver_*.dll‚ð—ñ‹“
@@ -163,8 +162,7 @@ DWORD CEpgDataCap_BonMain::OpenBonDriver(
 )
 {
 	DWORD ret;
-	int retry = 0;
-	while (retry <= this->openRetryCount) {
+	for (int retry = this->openRetryCount; retry >= 0; retry--) {
 		ret = this->bonCtrl.OpenBonDriver(bonDriverFile, this->openWait);
 		if (ret == NO_ERR){
 			this->lastONID = 0xFFFF;
@@ -185,8 +183,13 @@ DWORD CEpgDataCap_BonMain::OpenBonDriver(
 		else{
 			this->currentBonDriver = L"";
 		}
-		retry++;
-		Sleep(this->openRetryWait);
+		OutputDebugString(L"šOpenBonDriver failed.\r\n");
+		if (retry > 0) {
+			_OutputDebugString(L"Waiting for retry %d sec.\r\n", this->openRetryWait);
+			for (int i = this->openRetryWait / 100; i > 0; i--) {
+				Sleep(100);
+			}
+		}
 	}
 	return ret;
 }
