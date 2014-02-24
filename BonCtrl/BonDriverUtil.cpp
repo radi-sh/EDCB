@@ -4,6 +4,7 @@
 CBonDriverUtil::CBonDriverUtil(void)
 {
 	this->lockEvent = _CreateEvent(FALSE, TRUE, NULL );
+	this->lastLockedProc = NULL;
 
 	this->settingFolderPath = L"";
 	GetSettingPath(this->settingFolderPath);
@@ -37,26 +38,38 @@ CBonDriverUtil::~CBonDriverUtil(void)
 BOOL CBonDriverUtil::Lock(LPCWSTR log, DWORD timeOut)
 {
 	if( this->lockEvent == NULL ){
+		if (log != NULL){
+			_OutputDebugString(L"★%s: Lock: no lockEvent", log);
+		}
 		return FALSE;
-	}
-	if( log != NULL ){
-		OutputDebugString(log);
 	}
 	DWORD dwRet = WaitForSingleObject(this->lockEvent, timeOut);
 	if( dwRet == WAIT_ABANDONED || 
 		dwRet == WAIT_FAILED){
+		if (log != NULL){
+			_OutputDebugString(L"★%s: Lock: FAILED", log);
+		}
 		return FALSE;
 	}
+	if (dwRet == WAIT_TIMEOUT) {
+		if (log != NULL && this->lastLockedProc != NULL){
+			_OutputDebugString(L"★%s: Lock: WAIT_TIMEOUT force override lastLockedProc=%s", log, this->lastLockedProc);
+		}
+	}
+	this->lastLockedProc = log;
 	return TRUE;
 }
 
 void CBonDriverUtil::UnLock(LPCWSTR log)
 {
+	if (this->lastLockedProc != log) {
+		if (log != NULL && this->lastLockedProc != NULL){
+			_OutputDebugString(L"★%s: UnLock: force unlock lastLockedProc=%s", log, this->lastLockedProc);
+		}
+	}
+	this->lastLockedProc = NULL;
 	if( this->lockEvent != NULL ){
 		SetEvent(this->lockEvent);
-	}
-	if( log != NULL ){
-		OutputDebugString(log);
 	}
 }
 
@@ -70,7 +83,8 @@ void CBonDriverUtil::SetSettingFolder(
 	LPCWSTR bonDriverFolderPath
 )
 {
-	if( Lock() == FALSE ) return ;
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
+	if (Lock(PROCNAME) == FALSE) return;
 
 	this->settingFolderPath = settingFolderPath;
 	this->bonDriverFolderPath = bonDriverFolderPath;
@@ -90,7 +104,7 @@ void CBonDriverUtil::SetSettingFolder(
 	//指定フォルダのファイル一覧取得
 	find = FindFirstFile( searchKey.c_str(), &findData);
 	if ( find == INVALID_HANDLE_VALUE ) {
-		UnLock();
+		UnLock(PROCNAME);
 		return ;
 	}
 	do{
@@ -112,7 +126,7 @@ void CBonDriverUtil::SetSettingFolder(
 
 	FindClose(find);
 
-	UnLock();
+	UnLock(PROCNAME);
 }
 
 BOOL CBonDriverUtil::IsDllFile(wstring name)
@@ -142,14 +156,15 @@ DWORD CBonDriverUtil::EnumBonDriver(
 	map<int, wstring>* bonList
 )
 {
-	if( Lock() == FALSE ) return ERR_FALSE;
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
+	if (Lock(PROCNAME) == FALSE) return ERR_FALSE;
 
 	map<int, BON_DRIVER_INFO>::iterator itr;
 	for( itr = this->bonDllMap.begin(); itr != this->bonDllMap.end(); itr++ ){
 		bonList->insert(pair<int, wstring>(itr->first, itr->second.fileName));
 	}
 
-	UnLock();
+	UnLock(PROCNAME);
 
 	return NO_ERR;
 }
@@ -165,7 +180,8 @@ DWORD CBonDriverUtil::OpenBonDriver(
 	int openWait
 )
 {
-	if( Lock() == FALSE ) return ERR_OPEN_TUNER;
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
+	if (Lock(PROCNAME) == FALSE) return ERR_OPEN_TUNER;
 	DWORD err = ERR_OPEN_TUNER;
 	
 	map<int, BON_DRIVER_INFO>::iterator itrF;
@@ -180,7 +196,7 @@ DWORD CBonDriverUtil::OpenBonDriver(
 		err = ERR_FIND_TUNER;
 	}
 	
-	UnLock();
+	UnLock(PROCNAME);
 	return err;
 }
 
@@ -194,7 +210,8 @@ DWORD CBonDriverUtil::OpenBonDriver(
 	int openWait
 	)
 {
-	if( Lock() == FALSE ) return ERR_OPEN_TUNER;
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
+	if (Lock(PROCNAME) == FALSE) return ERR_OPEN_TUNER;
 	DWORD err = ERR_FIND_TUNER;
 	map<int, BON_DRIVER_INFO>::iterator itrF;
 	for( itrF = this->bonDllMap.begin(); itrF != this->bonDllMap.end(); itrF++ ){
@@ -211,7 +228,7 @@ DWORD CBonDriverUtil::OpenBonDriver(
 		_OutputDebugString(bonDriverFile);
 	}
 
-	UnLock();
+	UnLock(PROCNAME);
 	return err;
 }
 
@@ -304,6 +321,7 @@ DWORD CBonDriverUtil::_OpenBonDriver(
 			err = NO_ERR;
 		}
 	}catch(...){
+		OutputDebugString(L"★★_OpenBonDriver Exception");
 		if( this->bonIF != NULL ){
 			this->bonIF->CloseTuner();
 			this->bonIF->Release();
@@ -328,10 +346,11 @@ ERR_END:
 // エラーコード
 DWORD CBonDriverUtil::CloseBonDriver()
 {
-	if( Lock() == FALSE ) return ERR_FALSE;
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
+	if (Lock(PROCNAME) == FALSE) return ERR_FALSE;
 	DWORD err = NO_ERR;
 	err = _CloseBonDriver();
-	UnLock();
+	UnLock(PROCNAME);
 	return err;
 }
 
@@ -361,16 +380,17 @@ DWORD CBonDriverUtil::GetOriginalChList(
 	map<DWORD, BON_SPACE_INFO>* spaceMap
 )
 {
-	if( Lock() == FALSE ) return ERR_FALSE;
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
+	if (Lock(PROCNAME) == FALSE) return ERR_FALSE;
 
 	if( spaceMap == NULL || this->bon2IF == NULL ){
-		UnLock();
+		UnLock(PROCNAME);
 		return ERR_INVALID_ARG;
 	}
 
 	*spaceMap = this->loadChMap;
 
-	UnLock();
+	UnLock(PROCNAME);
 	return NO_ERR;
 }
 
@@ -379,12 +399,13 @@ DWORD CBonDriverUtil::GetOriginalChList(
 // チューナー名
 wstring CBonDriverUtil::GetTunerName()
 {
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
 	wstring name = L"";
-	if( Lock() == FALSE ) return name;
+	if (Lock(PROCNAME) == FALSE) return name;
 
 	name = this->loadTunerName;
 
-	UnLock();
+	UnLock(PROCNAME);
 	return name;
 }
 
@@ -399,24 +420,37 @@ DWORD CBonDriverUtil::SetCh(
 	DWORD ch
 	)
 {
-	if( Lock() == FALSE ) return FALSE;
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
+	if (Lock(PROCNAME) == FALSE) return FALSE;
 	if( this->bon2IF == NULL ){
-		UnLock();
+		UnLock(PROCNAME);
 		return ERR_NOT_INIT;
 	}
 	this->setSpace = space;
 	this->setCh = ch;
+	try{
 	if( this->bon2IF->SetChannel(space, ch) == FALSE ){
 		Sleep(100);
 		if( this->bon2IF->SetChannel(space, ch) == FALSE ){
-			UnLock();
+				UnLock(PROCNAME);
 			return ERR_FALSE;
 		}
 	}
+	}
+	catch (...){
+		_OutputDebugString(L"★★SetCh Exception: bon2IF->SetChannel(%d, %d)", space, ch);
+		UnLock(PROCNAME);
+		return ERR_FALSE;
+	}
 	Sleep(100);
+	try{
 	this->bon2IF->PurgeTsStream();
+	}
+	catch (...){
+		OutputDebugString(L"★★SetCh Exception: bon2IF->PurgeTsStream()");
+	}
 	this->initChSetFlag = TRUE;
-	UnLock();
+	UnLock(PROCNAME);
 	return NO_ERR;
 }
 
@@ -431,21 +465,32 @@ DWORD CBonDriverUtil::GetNowCh(
 	DWORD* ch
 	)
 {
-	if( Lock() == FALSE ) return FALSE;
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
+	if (Lock(PROCNAME) == FALSE) return FALSE;
 	if( this->bon2IF == NULL ){
-		UnLock();
+		UnLock(PROCNAME);
 		return FALSE;
 	}
 	if( this->initChSetFlag == FALSE ){
 		*space = 0xFFFFFFFF;
 		*ch = 0xFFFFFFFF;
 	}else{
+		try{
 		*space = this->bon2IF->GetCurSpace();
+		}
+		catch (...){
+			OutputDebugString(L"★★GetNowCh Exception: bon2IF->GetCurSpace()");
+		}
+		try{
 		*ch = this->bon2IF->GetCurChannel();
+		}
+		catch (...){
+			OutputDebugString(L"★★GetNowCh Exception: bon2IF->GetCurChannel()");
+		}
 		this->setSpace = *space;
 		this->setCh = *ch;
 	}
-	UnLock();
+	UnLock(PROCNAME);
 	return TRUE;
 }
 
@@ -472,19 +517,22 @@ BOOL CBonDriverUtil::GetTsStream(
 	DWORD *remain
 	)
 {
-	if( Lock() == FALSE ) return FALSE;
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
+	if (Lock(PROCNAME) == FALSE) return FALSE;
 
 	BOOL ret = FALSE;
 	if( this->bonIF == NULL ){
-		UnLock();
+		UnLock(PROCNAME);
 		return FALSE;
 	}
 	try{
 		ret = this->bonIF->GetTsStream(data, size, remain);
-	}catch(...){
+	}
+	catch (...){
+		OutputDebugString(L"★★GetTsStream Exception");
 		ret = FALSE;
 	}
-	UnLock();
+	UnLock(PROCNAME);
 	return ret;
 }
 
@@ -509,6 +557,7 @@ DWORD CBonDriverUtil::WaitTsStream(
 		ret = this->bonIF->WaitTsStream(timeout);
 	}
 	catch (...){
+		OutputDebugString(L"★★WaitTsStream Exception");
 		ret = WAIT_FAILED;
 	}
 	return ret;
@@ -519,18 +568,21 @@ DWORD CBonDriverUtil::WaitTsStream(
 // シグナルレベル
 float CBonDriverUtil::GetSignalLevel()
 {
-	if( Lock() == FALSE ) return 0;
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
+	if (Lock(PROCNAME) == FALSE) return -1;
 	if( this->bonIF == NULL ){
-		UnLock();
-		return 0;
+		UnLock(PROCNAME);
+		return -1;
 	}
 	float fLevel;
 	try{
 		fLevel = this->bonIF->GetSignalLevel();
-	}catch(...){
+	}
+	catch (...){
+		OutputDebugString(L"★★GetSignalLevel Exception");
 		fLevel = -1;
 	}
-	UnLock();
+	UnLock(PROCNAME);
 	return fLevel;
 }
 
@@ -539,8 +591,9 @@ float CBonDriverUtil::GetSignalLevel()
 // Ch設定3のファイルパス
 wstring CBonDriverUtil::GetChSet4Path()
 {
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
 	wstring ret = L"";
-	if( Lock() == FALSE ) return ret;
+	if (Lock(PROCNAME) == FALSE) return ret;
 
 	wstring fileTitle = L"";
 	map<int, BON_DRIVER_INFO>::iterator itrF;
@@ -554,7 +607,7 @@ wstring CBonDriverUtil::GetChSet4Path()
 	Format(ret, L"%s\\%s(%s).ChSet4.txt", this->settingFolderPath.c_str(), fileTitle.c_str(), tunerName.c_str() );
 
 
-	UnLock();
+	UnLock(PROCNAME);
 	return ret;
 }
 
@@ -563,8 +616,9 @@ wstring CBonDriverUtil::GetChSet4Path()
 // Ch設定4のファイルパス
 wstring CBonDriverUtil::GetChSet5Path()
 {
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
 	wstring ret = L"";
-	if( Lock() == FALSE ) return ret;
+	if (Lock(PROCNAME) == FALSE) return ret;
 
 	wstring fileTitle = L"";
 	map<int, BON_DRIVER_INFO>::iterator itrF;
@@ -575,7 +629,7 @@ wstring CBonDriverUtil::GetChSet5Path()
 
 	Format(ret, L"%s\\ChSet5.txt", this->settingFolderPath.c_str() );
 
-	UnLock();
+	UnLock(PROCNAME);
 	return ret;
 }
 
@@ -584,9 +638,10 @@ wstring CBonDriverUtil::GetChSet5Path()
 // インデックス値（-1で未Open）
 int CBonDriverUtil::GetOpenBonDriverIndex()
 {
-	if( Lock() == FALSE ) return -1;
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
+	if (Lock(PROCNAME) == FALSE) return -1;
 	int index = this->loadIndex;
-	UnLock();
+	UnLock(PROCNAME);
 	return index;
 }
 
@@ -595,8 +650,9 @@ int CBonDriverUtil::GetOpenBonDriverIndex()
 // BonDriverのファイル名（拡張子含む）
 wstring CBonDriverUtil::GetOpenBonDriverFileName()
 {
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
 	wstring ret = L"";
-	if( Lock() == FALSE ) return ret;
+	if (Lock(PROCNAME) == FALSE) return ret;
 
 	map<int, BON_DRIVER_INFO>::iterator itrF;
 	itrF = this->bonDllMap.find(this->loadIndex);
@@ -604,7 +660,7 @@ wstring CBonDriverUtil::GetOpenBonDriverFileName()
 		ret = itrF->second.fileName;
 	}
 
-	UnLock();
+	UnLock(PROCNAME);
 	return ret;
 }
 
@@ -613,8 +669,9 @@ wstring CBonDriverUtil::GetOpenBonDriverFileName()
 // BonDriverで定義されている物理チャンネル名
 wstring CBonDriverUtil::GetChName(DWORD space, DWORD ch)
 {
+	static const WCHAR PROCNAME[] = __FUNCTIONW__;
 	wstring ret = L"";
-	if( Lock() == FALSE ) return ret;
+	if (Lock(PROCNAME) == FALSE) return ret;
 
 	map<DWORD, BON_SPACE_INFO>::iterator itrSpace;
 	itrSpace = this->loadChMap.find(space);
@@ -626,6 +683,6 @@ wstring CBonDriverUtil::GetChName(DWORD space, DWORD ch)
 		}
 	}
 
-	UnLock();
+	UnLock(PROCNAME);
 	return ret;
 }

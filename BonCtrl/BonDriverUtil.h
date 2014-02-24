@@ -161,6 +161,7 @@ public:
 
 protected:
 	HANDLE lockEvent;
+	LPCWSTR lastLockedProc;
 
 	wstring settingFolderPath;
 	wstring bonDriverFolderPath;
