@@ -39,6 +39,9 @@ CEpgDataCap_BonMain::CEpgDataCap_BonMain(void)
 	this->outCtrlID = -1;
 
 	this->openWait = 200;
+
+	this->openRetryCount = 10;
+	this->openRetryWait = 10000;
 }
 
 
@@ -132,6 +135,10 @@ void CEpgDataCap_BonMain::ReloadSetting()
 	this->bonCtrl.SetTsBuffMaxCount(tsBuffMaxCount, writeBuffMaxCount);
 
 	this->openWait = (DWORD)GetPrivateProfileInt( L"SET", L"OpenWait", 200, appIniPath.c_str() );
+
+	this->openRetryCount = (DWORD)GetPrivateProfileInt(L"SET", L"OpenRetryCount", 10, appIniPath.c_str());
+	this->openRetryWait = (DWORD)GetPrivateProfileInt(L"SET", L"OpenRetryWait", 10000, appIniPath.c_str());
+
 }
 
 //BonDriverƒtƒHƒ‹ƒ_‚ÌBonDriver_*.dll‚ð—ñ‹“
@@ -155,22 +162,31 @@ DWORD CEpgDataCap_BonMain::OpenBonDriver(
 	LPCWSTR bonDriverFile
 )
 {
-	DWORD ret = this->bonCtrl.OpenBonDriver(bonDriverFile, this->openWait);
-	if( ret == NO_ERR ){
-		this->lastONID = 0xFFFF;
-		this->lastTSID = 0xFFFF;
-		this->lastSID = 0xFFFF;
-		this->currentBonDriver = bonDriverFile;
-		if( this->nwCtrlID == 0 ){
-			if( this->bonCtrl.CreateServiceCtrl(&this->nwCtrlID) == TRUE ){
-				this->bonCtrl.SetScramble(this->nwCtrlID, this->enableScrambleFlag);
-				this->bonCtrl.SetServiceMode(this->nwCtrlID, this->needCaption, this->needData);
+	DWORD ret;
+	int retry = 0;
+	while (retry <= this->openRetryCount) {
+		ret = this->bonCtrl.OpenBonDriver(bonDriverFile, this->openWait);
+		if (ret == NO_ERR){
+			this->lastONID = 0xFFFF;
+			this->lastTSID = 0xFFFF;
+			this->lastSID = 0xFFFF;
+			this->currentBonDriver = bonDriverFile;
+			if (this->nwCtrlID == 0){
+				if (this->bonCtrl.CreateServiceCtrl(&this->nwCtrlID) == TRUE){
+					this->bonCtrl.SetScramble(this->nwCtrlID, this->enableScrambleFlag);
+					this->bonCtrl.SetServiceMode(this->nwCtrlID, this->needCaption, this->needData);
+				}
 			}
-		}else{
-			this->bonCtrl.ClearErrCount(this->nwCtrlID);
+			else{
+				this->bonCtrl.ClearErrCount(this->nwCtrlID);
+			}
+			break;
 		}
-	}else{
-		this->currentBonDriver = L"";
+		else{
+			this->currentBonDriver = L"";
+		}
+		retry++;
+		Sleep(this->openRetryWait);
 	}
 	return ret;
 }
