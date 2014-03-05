@@ -429,13 +429,13 @@ DWORD CBonDriverUtil::SetCh(
 	this->setSpace = space;
 	this->setCh = ch;
 	try{
-	if( this->bon2IF->SetChannel(space, ch) == FALSE ){
-		Sleep(100);
-		if( this->bon2IF->SetChannel(space, ch) == FALSE ){
+		if (this->bon2IF->SetChannel(space, ch) == FALSE){
+			Sleep(100);
+			if (this->bon2IF->SetChannel(space, ch) == FALSE){
 				UnLock(PROCNAME);
-			return ERR_FALSE;
+				return ERR_FALSE;
+			}
 		}
-	}
 	}
 	catch (...){
 		_OutputDebugString(L"ššSetCh Exception: bon2IF->SetChannel(%d, %d)", space, ch);
@@ -444,7 +444,7 @@ DWORD CBonDriverUtil::SetCh(
 	}
 	Sleep(100);
 	try{
-	this->bon2IF->PurgeTsStream();
+		this->bon2IF->PurgeTsStream();
 	}
 	catch (...){
 		OutputDebugString(L"ššSetCh Exception: bon2IF->PurgeTsStream()");
@@ -476,13 +476,13 @@ DWORD CBonDriverUtil::GetNowCh(
 		*ch = 0xFFFFFFFF;
 	}else{
 		try{
-		*space = this->bon2IF->GetCurSpace();
+			*space = this->bon2IF->GetCurSpace();
 		}
 		catch (...){
 			OutputDebugString(L"ššGetNowCh Exception: bon2IF->GetCurSpace()");
 		}
 		try{
-		*ch = this->bon2IF->GetCurChannel();
+			*ch = this->bon2IF->GetCurChannel();
 		}
 		catch (...){
 			OutputDebugString(L"ššGetNowCh Exception: bon2IF->GetCurChannel()");
