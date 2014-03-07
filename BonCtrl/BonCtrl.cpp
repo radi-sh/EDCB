@@ -740,25 +740,22 @@ UINT WINAPI CBonCtrl::AnalyzeThread(LPVOID param)
 			}
 		}catch(...){
 			_OutputDebugString(L"ÅöÅöAnalyzeThread Exception1");
-			if( data != NULL ){
-				if( sys->tsOut.NeedPurge() == FALSE ){
-					sys->tsOut.AddTSBuff(data);
-					SAFE_DELETE(data);
-				}
-			}
-			continue ;
 		}
 		try{
 			if( data != NULL ){
-				if( sys->tsOut.NeedPurge() == FALSE ){
+				if (sys->tsOut.NeedPurge() == FALSE){
 					sys->tsOut.AddTSBuff(data);
-					SAFE_DELETE(data);
 				}
-			}else{
+				SAFE_DELETE(data);
+			}
+			else{
 				Sleep(5);
 			}
 		}catch(...){
 			_OutputDebugString(L"ÅöÅöAnalyzeThread Exception2");
+			if (data != NULL){
+				SAFE_DELETE(data);
+			}
 		}
 	}
 	return 0;
