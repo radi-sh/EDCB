@@ -35,6 +35,8 @@ protected:
 		ULONGLONG total;
 		ULONGLONG drop;
 		ULONGLONG scramble;
+		string pidName;
+		BOOL isMp2Stream;
 		_DROP_INFO(){
 			PID = 0xFFFF;
 			lastCounter = 0;
@@ -42,11 +44,14 @@ protected:
 			total = 0;
 			drop = 0;
 			scramble = 0;
+			pidName = "";
+			isMp2Stream = FALSE;
 		};
 	}DROP_INFO;
 
 	map<WORD, DROP_INFO> infoMap;
 	ULONGLONG drop;
+	ULONGLONG dropMp2Stream;
 	ULONGLONG scramble;
 	vector<wstring> log;
 	LONGLONG lastLogTime;
@@ -55,7 +60,6 @@ protected:
 	float signalLv;
 	wstring bonFile;
 
-	map<WORD, string> pidName;
 protected:
 	void CheckCounter(CTSPacketUtil* tsPacket, DROP_INFO* info);
 
