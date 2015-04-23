@@ -1,5 +1,6 @@
 #include "StdAfx.h"
 #include "RestApiManager.h"
+#include <atltime.h>
 
 
 CRestApiManager::CRestApiManager(void)
@@ -267,6 +268,14 @@ DWORD CRestApiManager::GetEnumEventInfo(string param, HTTP_STREAM* sendParam, CE
 	if( itr != paramMap.end() ){
 		count = (DWORD)atoi(itr->second.c_str());
 	}
+	DWORD pfOnly = 0;
+	itr = paramMap.find("pfOnly");
+	if (itr != paramMap.end()){
+		pfOnly = (DWORD) atoi(itr->second.c_str());
+	}
+	SYSTEMTIME nowSystemTime;
+	GetLocalTime(&nowSystemTime);
+	CTime now(nowSystemTime);
 
 	vector<EPGDB_SERVICE_EVENT_INFO*> list;
 	wstring xml = L"";
@@ -281,16 +290,43 @@ DWORD CRestApiManager::GetEnumEventInfo(string param, HTTP_STREAM* sendParam, CE
 		wstring serviceinfo = L"";
 		serviceinfo += L"<items>";
 		for( size_t i=0; i<list.size(); i++ ){
-			for( size_t j=0; j<list[i]->eventList.size(); j++){
+			DWORD pfFound = 0;
+			if (ONID != 0xFFFF && list[i]->serviceInfo.ONID != ONID) {
+				list[i]->eventList.clear();
+				SAFE_DELETE(list[i]);
+				continue;
+			}
+			if (TSID != 0xFFFF && list[i]->serviceInfo.TSID != TSID) {
+				list[i]->eventList.clear();
+				SAFE_DELETE(list[i]);
+				continue;
+			}
+			if (SID != 0xFFFF && list[i]->serviceInfo.SID != SID) {
+				list[i]->eventList.clear();
+				SAFE_DELETE(list[i]);
+				continue;
+			}
+			for (size_t j = 0; j<list[i]->eventList.size(); j++){
 				EPGDB_EVENT_INFO* eventInfo = list[i]->eventList[j];
-				if( eventInfo->original_network_id != ONID && ONID != 0xFFFF ){
-					continue;
-				}
-				if( eventInfo->transport_stream_id != TSID && TSID != 0xFFFF ){
-					continue;
-				}
-				if( eventInfo->service_id != SID && SID != 0xFFFF ){
-					continue;
+				if (pfOnly) {
+					if (pfFound == 0) {
+						CTime startTime(eventInfo->start_time);
+						CTimeSpan duration(0, 0, 0, eventInfo->durationSec);
+						CTime endTime = startTime + duration;
+						if (startTime <= now && endTime > now) {
+							pfFound = 1;
+						}
+						else {
+							continue;
+						}
+					}
+					else if (pfFound == 1) {
+						pfFound = 2;
+					}
+					else {
+						pfFound = 0;
+						break;
+					}
 				}
 				if( total < index ){
 					total++;
