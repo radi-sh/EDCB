@@ -143,7 +143,7 @@ UINT WINAPI CEpgDBManager::LoadThread(LPVOID param)
 				//見つかったファイルを一覧に追加
 				wstring epgFilePath = L"";
 				Format(epgFilePath, L"%s\\%s", epgDataPath.c_str(), findData.cFileName);
-				LONGLONG fileTime = ((LONGLONG)findData.ftLastWriteTime.dwHighDateTime<<32) | (LONGLONG)findData.ftLastWriteTime.dwLowDateTime;
+				LONGLONG fileTime = ((LONGLONG) findData.ftLastWriteTime.dwHighDateTime << 32) | (LONGLONG) findData.ftLastWriteTime.dwLowDateTime;
 
 				epgFileList.insert(pair<LONGLONG, wstring>(fileTime, epgFilePath));
 			}
@@ -155,37 +155,46 @@ UINT WINAPI CEpgDBManager::LoadThread(LPVOID param)
 	//EPGファイルの解析
 	multimap<LONGLONG, wstring>::iterator itr;
 	for( itr = epgFileList.begin(); itr != epgFileList.end(); itr++ ){
-		HANDLE file = _CreateFile( itr->second.c_str(), GENERIC_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL );
-		if( file != INVALID_HANDLE_VALUE ){
-			FILETIME CreationTime;
-			FILETIME LastAccessTime;
-			FILETIME LastWriteTime;
-			GetFileTime(file, &CreationTime, &LastAccessTime, &LastWriteTime);
-
-			LONGLONG fileTime = ((LONGLONG)LastWriteTime.dwHighDateTime)<<32 | (LONGLONG)LastWriteTime.dwLowDateTime;
-			if( fileTime + 7*24*60*60*I64_1SEC < GetNowI64Time() ){
-				//1週間以上前のファイルなので削除
-				CloseHandle(file);
-				DeleteFile( itr->second.c_str() );
-				_OutputDebugString(L"★delete %s", itr->second.c_str());
-			}else{
-
-				DWORD fileSize = GetFileSize( file, NULL );
-				BYTE readBuff[188*1024];
+		wstring::size_type pos;
+		if (itr->first + 7 * 24 * 60 * 60 * I64_1SEC < GetNowI64Time()){
+			//1週間以上前のファイルなので削除
+			DeleteFile(itr->second.c_str());
+			_OutputDebugString(L"★delete %s", itr->second.c_str());
+		} else if ((pos = itr->second.find(L"Short_epg.dat")) != wstring::npos) {
+			wstring tname = itr->second.substr(0, pos) + L"_epg.dat";
+			multimap<LONGLONG, wstring>::iterator itr2;
+			for (itr2 = epgFileList.begin(); itr2 != epgFileList.end(); itr2++) {
+				if (itr2->second == tname) {
+					break;
+				}
+			}
+			if (itr2 != epgFileList.end()) {
+				// Shortではないファイルが存在する
+				if (itr->first < itr2->first) {
+					// Shortファイルのほうが古いので削除
+					DeleteFile(itr->second.c_str());
+					_OutputDebugString(L"★delete %s because old short", itr->second.c_str());
+				}
+			}
+		} else {
+			HANDLE file = _CreateFile(itr->second.c_str(), GENERIC_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+			if (file != INVALID_HANDLE_VALUE){
+				DWORD fileSize = GetFileSize(file, NULL);
+				BYTE readBuff[188 * 1024];
 				DWORD readSize = 0;
-				while( readSize < fileSize ){
-					if( ::WaitForSingleObject(sys->loadStopEvent, 0) != WAIT_TIMEOUT ){
+				while (readSize < fileSize){
+					if (::WaitForSingleObject(sys->loadStopEvent, 0) != WAIT_TIMEOUT){
 						//キャンセルされた
 						CloseHandle(file);
 						epgUtil.UnInitialize();
 						return 0;
 					}
-					DWORD read=0;
-					ReadFile( file, &readBuff, 188*1024, &read, NULL );
-					for( DWORD i=0; i<read; i+=188 ){
-						epgUtil.AddTSPacket(readBuff+i, 188);
+					DWORD read = 0;
+					ReadFile(file, &readBuff, 188 * 1024, &read, NULL);
+					for (DWORD i = 0; i < read; i += 188){
+						epgUtil.AddTSPacket(readBuff + i, 188);
 					}
-					readSize+=read;
+					readSize += read;
 					Sleep(0);
 				}
 				CloseHandle(file);
