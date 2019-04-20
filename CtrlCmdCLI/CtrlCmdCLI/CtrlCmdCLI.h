@@ -322,7 +322,7 @@ namespace CtrlCmdCLI {
         /// <param name="resVal">[OUT]ƒoƒCƒiƒŠ</param>
 		UInt32 SendFileCopy(
 			String^ val,
-			[Runtime::InteropServices::Out]array<byte>^% resVal
+			[Runtime::InteropServices::Out]cli::array<byte>^% resVal
 			);
 
 		/// <summary>

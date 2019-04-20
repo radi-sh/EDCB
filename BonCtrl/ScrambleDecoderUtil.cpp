@@ -1,5 +1,6 @@
 #include "StdAfx.h"
 #include "ScrambleDecoderUtil.h"
+#include "typeinfo.h"
 
 
 CScrambleDecoderUtil::CScrambleDecoderUtil(void)

@@ -1656,7 +1656,7 @@ UInt32 CtrlCmdUtil::SendChgManualAdd(
 /// <param name="resVal">[OUT]ƒoƒCƒiƒŠ</param>
 UInt32 CtrlCmdUtil::SendFileCopy(
 	String^ val,
-	[Runtime::InteropServices::Out]array<byte>^% resVal
+	[Runtime::InteropServices::Out]cli::array<byte>^% resVal
 	)
 {
 	pin_ptr<const wchar_t> valPin = PtrToStringChars(val);
@@ -1666,7 +1666,7 @@ UInt32 CtrlCmdUtil::SendFileCopy(
 	BYTE* _resVal = NULL;
 	DWORD ret = this->sendCmd->SendFileCopy(_val, &_resVal, &resValSize);
 	if( ret == CMD_SUCCESS ){
-		resVal = gcnew array<byte>(resValSize);
+		resVal = gcnew cli::array<byte>(resValSize);
 		System::Runtime::InteropServices::Marshal::Copy(IntPtr(_resVal), resVal, 0, resValSize);
 	}
 
