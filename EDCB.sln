@@ -30,10 +30,15 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Write_Default", "Write_Default\Write_Default\Write_Default.vcxproj", "{1A31824D-D8E5-4AC5-9D89-354FEC750B94}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Write_AVIVO", "Write_AVIVO\Write_AVIVO\Write_AVIVO.vcxproj", "{6497AE8C-A158-4262-850B-B17B24B7B22A}"
+	ProjectSection(ProjectDependencies) = postProject
+		{E8A3F6FA-AE1C-4C8E-A0B6-9C8480324EAA} = {E8A3F6FA-AE1C-4C8E-A0B6-9C8480324EAA}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "twitter", "twitter\twitter\twitter.vcxproj", "{7A78654A-198C-47CE-9EB3-C4583B7BF8C5}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EpgTimerPlugIn", "EpgTimerPlugIn\EpgTimerPlugIn\EpgTimerPlugIn.vcxproj", "{90ECFC68-A7C2-4BDB-A6DD-C6736FCDEECB}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BaseClasses", "BaseClasses\BaseClasses.vcxproj", "{E8A3F6FA-AE1C-4C8E-A0B6-9C8480324EAA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -147,8 +152,19 @@ Global
 		{90ECFC68-A7C2-4BDB-A6DD-C6736FCDEECB}.Release|Win32.Build.0 = Release|Win32
 		{90ECFC68-A7C2-4BDB-A6DD-C6736FCDEECB}.Release|x64.ActiveCfg = Release|x64
 		{90ECFC68-A7C2-4BDB-A6DD-C6736FCDEECB}.Release|x64.Build.0 = Release|x64
+		{E8A3F6FA-AE1C-4C8E-A0B6-9C8480324EAA}.Debug|Win32.ActiveCfg = Debug|Win32
+		{E8A3F6FA-AE1C-4C8E-A0B6-9C8480324EAA}.Debug|Win32.Build.0 = Debug|Win32
+		{E8A3F6FA-AE1C-4C8E-A0B6-9C8480324EAA}.Debug|x64.ActiveCfg = Debug|x64
+		{E8A3F6FA-AE1C-4C8E-A0B6-9C8480324EAA}.Debug|x64.Build.0 = Debug|x64
+		{E8A3F6FA-AE1C-4C8E-A0B6-9C8480324EAA}.Release|Win32.ActiveCfg = Release|Win32
+		{E8A3F6FA-AE1C-4C8E-A0B6-9C8480324EAA}.Release|Win32.Build.0 = Release|Win32
+		{E8A3F6FA-AE1C-4C8E-A0B6-9C8480324EAA}.Release|x64.ActiveCfg = Release|x64
+		{E8A3F6FA-AE1C-4C8E-A0B6-9C8480324EAA}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {AE088ABD-0080-4DC3-A251-D5E7B75ABE03}
 	EndGlobalSection
 EndGlobal
